@@ -1,8 +1,13 @@
 # Game Arcade
 
-A small browser arcade. Play it at https://sharpi-10.github.io/game-arcade/
+A small browser arcade at https://sharpi-10.github.io/game-arcade/
 
-- **Turbo Karts**: a 3D kart racer with drifting, boosts and items.
-- **Golden Ace Casino**: blackjack and Texas Hold'em, with chips shared between tables.
+The home page is a single code box. Each game unlocks with its own code, which you only get by being told it. The page holds no codes or game links: every game's card is encrypted with its code.
 
-Everything is plain HTML, CSS and JavaScript. To run it locally, open `index.html` in a browser.
+Everything is plain HTML, CSS and JavaScript. To run it locally, serve the folder (for example `python3 -m http.server`) and open the address it prints.
+
+To add a game or change a code, edit the private game list kept outside this repository, then run:
+
+```
+node tools/lock-games.mjs path/to/games.json
+```

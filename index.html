@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Game Arcade</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,95 +10,49 @@
 <style>
   :root {
     --bg: #07110c;
-    --felt: #0f6b3e;
-    --felt-hi: #1b8d55;
-    --felt-lo: #073821;
     --gold: #f5c84c;
     --gold-hi: #ffe9a8;
     --gold-lo: #a8720f;
-    --red: #e0414b;
     --text: #f6f1e3;
     --muted: #b8c3b6;
     --line: rgba(255, 255, 255, .12);
-    --bar: rgba(5, 10, 8, .95);
+    --good: #4ade80;
+    --bad: #f87171;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     color: var(--text);
     font-family: Rubik, system-ui, sans-serif;
     background:
-      radial-gradient(900px 500px at 50% -10%, rgba(245, 200, 76, .18), transparent 60%),
+      radial-gradient(900px 500px at 50% -10%, rgba(245, 200, 76, .14), transparent 60%),
       radial-gradient(900px 600px at 50% 115%, rgba(15, 107, 62, .55), transparent 60%),
       var(--bg);
     background-attachment: fixed;
   }
 
-  /* ---------- Top bar ---------- */
-  .topbar {
-    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; height: 56px;
-    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
-    padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
-    background: linear-gradient(180deg, var(--bar), rgba(5, 10, 8, .8));
-    border-bottom: 1px solid rgba(245, 200, 76, .25);
-    backdrop-filter: blur(6px);
-  }
-  .brand {
-    grid-column: 2;
-    font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 20px; letter-spacing: .08em;
-    color: var(--gold); white-space: nowrap;
-  }
-  .brand .red { color: var(--red); }
-  .chips {
-    grid-column: 3; justify-self: end;
-    display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 6px;
-    border-radius: 999px; background: rgba(0, 0, 0, .45); border: 1px solid rgba(245, 200, 76, .45);
-    color: var(--text); text-decoration: none; font-weight: 700; font-variant-numeric: tabular-nums;
-  }
-  .chips:hover { border-color: var(--gold); }
-  .coin {
-    width: 24px; height: 24px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 45%, var(--gold-lo));
-    box-shadow: inset 0 0 0 2px rgba(120, 70, 0, .45);
-  }
-
-  /* Paints the phone's status-bar strip above the sticky top bar. */
-  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); }
-
   /* ---------- Floating suits ---------- */
   .suits { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
   .suits span {
-    position: absolute; bottom: -80px; color: #fff; opacity: .06;
+    position: absolute; bottom: -80px; color: #fff; opacity: .05;
     animation: drift linear infinite;
   }
-  .suits span.red { color: #ff6b74; opacity: .09; }
+  .suits span.red { color: #ff6b74; opacity: .08; }
   @keyframes drift {
     from { transform: translateY(0) rotate(0); }
     to { transform: translateY(-115vh) rotate(360deg); }
   }
-  @media (prefers-reduced-motion: reduce) { .suits { display: none; } }
 
-  /* ---------- Layout ---------- */
-  header, main, footer { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
-  header { padding-top: 56px; padding-bottom: 8px; text-align: center; }
-  h1 {
-    font-family: Cinzel, Georgia, serif; font-weight: 900; margin: 0;
-    font-size: clamp(40px, 8vw, 72px); letter-spacing: .04em; line-height: 1.05;
-    background: linear-gradient(100deg, var(--gold-lo) 0%, var(--gold) 25%, var(--gold-hi) 40%, var(--gold) 55%, var(--gold-lo) 80%);
-    background-size: 250% 100%;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: shimmer 6s linear infinite;
-    filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .5));
+  /* ---------- Unlocked games ---------- */
+  main {
+    position: relative; z-index: 1; max-width: 1040px; margin: 0 auto;
+    padding: max(40px, env(safe-area-inset-top)) 16px calc(170px + env(safe-area-inset-bottom));
   }
-  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
-  .tagline { color: var(--muted); font-size: 17px; margin: 12px 0 0; }
-
-  /* Gold rule with the section name in the middle. */
   .section-title {
-    display: flex; align-items: center; gap: 16px;
-    margin: 44px 0 20px;
+    display: flex; align-items: center; gap: 16px; margin: 0 0 24px;
     font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 15px; letter-spacing: .24em;
     color: var(--gold); text-transform: uppercase; white-space: nowrap;
   }
@@ -107,10 +61,9 @@
     background: linear-gradient(90deg, transparent, rgba(245, 200, 76, .55));
   }
   .section-title::after { background: linear-gradient(90deg, rgba(245, 200, 76, .55), transparent); }
-
+  .section-title[hidden] { display: none; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 24px; }
 
-  /* ---------- Game cards ---------- */
   .card {
     display: flex; flex-direction: column; overflow: hidden;
     border-radius: 24px; color: inherit; text-decoration: none;
@@ -122,6 +75,11 @@
   .card:hover, .card:focus-visible {
     transform: translateY(-6px); outline: none; border-color: var(--gold);
     box-shadow: 0 26px 60px rgba(0, 0, 0, .55), 0 0 0 1px var(--gold), 0 0 40px rgba(245, 200, 76, .25);
+  }
+  .card.fresh { animation: card-in .8s cubic-bezier(.2, .8, .2, 1.2), card-glow 2.4s ease-out; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(40px) scale(.9); } }
+  @keyframes card-glow {
+    0%, 40% { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 60px rgba(245, 200, 76, .55); }
   }
   .thumb { aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid rgba(245, 200, 76, .25); }
   .thumb svg { width: 100%; height: 100%; display: block; transition: transform .4s cubic-bezier(.2, .8, .2, 1); }
@@ -151,198 +109,253 @@
     box-shadow: 0 3px 0 var(--gold-lo);
   }
 
-  /* ---------- Coming soon ---------- */
-  .soon-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-  .soon {
-    display: flex; align-items: center; gap: 14px; height: 84px; padding: 0 18px;
-    border-radius: 18px; border: 1px dashed rgba(245, 200, 76, .4);
-    background: rgba(255, 255, 255, .02);
+  /* ---------- Code box, always at the bottom ---------- */
+  .code-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; margin: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 40px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    background: linear-gradient(180deg, transparent, rgba(5, 10, 8, .9) 50%);
+    pointer-events: none;
   }
-  .soon .emoji {
-    width: 48px; height: 48px; flex: none; border-radius: 50%;
-    display: grid; place-items: center; font-size: 24px;
-    background: radial-gradient(circle at 50% 35%, var(--felt-hi), var(--felt) 55%, var(--felt-lo));
-    box-shadow: inset 0 0 0 2px rgba(245, 200, 76, .5);
+  .code-msg {
+    min-height: 20px; margin: 0; font-weight: 600; font-size: 15px; text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
   }
-  .soon > span:last-child { min-width: 0; }
-  .soon b { display: block; font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .soon small { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-
-  footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 48px; padding-bottom: 32px; }
+  .code-msg.ok { color: var(--gold-hi); }
+  .code-msg.bad { color: var(--bad); }
+  .code-box {
+    pointer-events: auto; cursor: text;
+    width: min(560px, 100%); height: 64px; display: flex; align-items: center; gap: 12px;
+    padding: 0 8px 0 20px; border-radius: 999px;
+    background: linear-gradient(180deg, #16241c, #0b130e);
+    border: 1px solid rgba(245, 200, 76, .45);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .code-box:focus-within { border-color: var(--gold); box-shadow: 0 16px 40px rgba(0, 0, 0, .55), 0 0 0 4px rgba(245, 200, 76, .16); }
+  body.empty .code-box:not(:focus-within) { animation: breathe 3s ease-in-out infinite; }
+  @keyframes breathe { 50% { box-shadow: 0 16px 40px rgba(0, 0, 0, .55), 0 0 32px rgba(245, 200, 76, .3); } }
+  .code-box.wrong { border-color: var(--bad); animation: shake .45s; }
+  .code-box.right { border-color: var(--good); box-shadow: 0 0 0 4px rgba(74, 222, 128, .2), 0 0 34px rgba(74, 222, 128, .4); }
+  @keyframes shake {
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+  }
+  .code-box svg { width: 20px; height: 20px; flex: none; color: var(--gold); }
+  .code-box input {
+    flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none;
+    color: var(--text); font: 600 18px Rubik, system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase;
+  }
+  .code-box input::placeholder { color: var(--muted); letter-spacing: .04em; text-transform: none; opacity: .8; }
+  .unlock {
+    height: 48px; padding: 0 22px; border: 0; border-radius: 999px; cursor: pointer; flex: none;
+    font: 700 14px Rubik, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase;
+    color: #3a2300; background: linear-gradient(180deg, var(--gold-hi), var(--gold) 45%, #e0a526);
+    box-shadow: 0 3px 0 var(--gold-lo);
+    transition: transform .12s, filter .12s, opacity .2s;
+  }
+  .unlock:hover { filter: brightness(1.08); }
+  .unlock:active { transform: translateY(2px); }
+  .unlock:disabled { opacity: .6; cursor: progress; }
 
   @media (max-width: 520px) {
-    .brand { grid-column: 1 / 3; justify-self: start; font-size: 17px; }
-    header { padding-top: 40px; }
+    .code-box { height: 58px; padding-left: 16px; gap: 10px; }
+    .code-box input { font-size: 16px; letter-spacing: .1em; }
+    .unlock { height: 44px; padding: 0 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .suits { display: none; }
+    body.empty .code-box:not(:focus-within), .card.fresh, .code-box.wrong { animation: none; }
   }
 </style>
 </head>
-<body>
+<body class="empty">
 <div class="suits" id="suits" aria-hidden="true"></div>
 
-<div class="topbar">
-  <div class="brand"><span>♠</span> GAME ARCADE <span class="red">♥</span></div>
-  <a class="chips" href="games/casino/index.html" title="Casino chips"><span class="coin"></span><span id="chips">$1,000</span></a>
-</div>
-
-<header>
-  <h1>Game Arcade</h1>
-  <p class="tagline">Pick a game and press play.</p>
-</header>
-
 <main>
-  <div class="section-title">Games</div>
+  <div class="section-title" id="games-title" hidden>Your games</div>
   <div class="grid" id="games"></div>
-
-  <div class="section-title">Coming soon</div>
-  <div class="grid soon-grid" id="coming"></div>
 </main>
 
-<footer>Scores and chips are saved in this browser.</footer>
-
-<template id="kart-art">
-  <svg viewBox="0 0 320 200" aria-hidden="true">
-    <defs>
-      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#3d8ce0"/>
-        <stop offset="1" stop-color="#cde8ff"/>
-      </linearGradient>
-    </defs>
-    <rect width="320" height="200" fill="url(#sky)"/>
-    <ellipse cx="70" cy="40" rx="30" ry="10" fill="#fff" opacity=".9"/>
-    <ellipse cx="250" cy="30" rx="36" ry="11" fill="#fff" opacity=".85"/>
-    <path d="M0 112 L50 80 L95 104 L150 70 L205 102 L255 78 L320 108 L320 120 L0 120Z" fill="#7a9a6e"/>
-    <rect y="112" width="320" height="88" fill="#5fae4b"/>
-    <path d="M146 112 L174 112 L312 200 L8 200Z" fill="#55585f"/>
-    <path d="M146 112 L8 200" stroke="#e53935" stroke-width="7"/>
-    <path d="M146 112 L8 200" stroke="#fff" stroke-width="7" stroke-dasharray="9 9"/>
-    <path d="M174 112 L312 200" stroke="#e53935" stroke-width="7"/>
-    <path d="M174 112 L312 200" stroke="#fff" stroke-width="7" stroke-dasharray="9 9"/>
-    <path d="M160 116 L160 200" stroke="#f5f5f5" stroke-width="3" stroke-dasharray="8 10"/>
-    <g transform="translate(120 128)">
-      <rect x="8" y="50" width="22" height="20" rx="4" fill="#1a1a1a"/>
-      <rect x="50" y="50" width="22" height="20" rx="4" fill="#1a1a1a"/>
-      <rect x="2" y="16" width="76" height="8" rx="2" fill="#e53935"/>
-      <rect x="36" y="22" width="8" height="14" fill="#2a2a33"/>
-      <rect x="12" y="36" width="56" height="22" rx="6" fill="#e53935"/>
-      <circle cx="40" cy="30" r="13" fill="#e53935"/>
-      <rect x="18" y="56" width="10" height="5" fill="#ffa31a"/>
-      <rect x="52" y="56" width="10" height="5" fill="#ffa31a"/>
-    </g>
-  </svg>
-</template>
-
-<template id="casino-art">
-  <svg viewBox="0 0 320 200" aria-hidden="true">
-    <defs>
-      <radialGradient id="felt" cx="50%" cy="35%" r="75%">
-        <stop offset="0" stop-color="#1b8d55"/>
-        <stop offset=".6" stop-color="#0f6b3e"/>
-        <stop offset="1" stop-color="#073821"/>
-      </radialGradient>
-    </defs>
-    <rect width="320" height="200" fill="url(#felt)"/>
-    <path d="M20 40 Q160 150 300 40" fill="none" stroke="#f5c84c" stroke-opacity=".5" stroke-width="2"/>
-    <g transform="translate(118 46) rotate(-12)">
-      <rect width="62" height="88" rx="6" fill="#fff" stroke="#00000022"/>
-      <text x="8" y="20" font-family="Georgia" font-weight="700" font-size="16" fill="#16181d">A</text>
-      <text x="31" y="58" font-size="34" text-anchor="middle" fill="#16181d">♠</text>
-    </g>
-    <g transform="translate(150 40) rotate(10)">
-      <rect width="62" height="88" rx="6" fill="#fff" stroke="#00000022"/>
-      <text x="8" y="20" font-family="Georgia" font-weight="700" font-size="16" fill="#c61f2c">K</text>
-      <rect x="12" y="26" width="38" height="50" rx="3" fill="#f3dfa0" stroke="#c61f2c"/>
-      <text x="31" y="60" font-family="Georgia" font-weight="900" font-size="24" text-anchor="middle" fill="#c61f2c">K</text>
-    </g>
-    <g transform="translate(62 140)">
-      <circle r="22" fill="#1f1f22" stroke="#f5c84c" stroke-width="5" stroke-dasharray="6 6"/>
-      <circle r="12" fill="none" stroke="#f5c84c" stroke-opacity=".6" stroke-dasharray="3 3"/>
-    </g>
-    <g transform="translate(262 128)">
-      <circle r="22" fill="#d32f2f" stroke="#fff" stroke-width="5" stroke-dasharray="6 6"/>
-      <circle r="12" fill="none" stroke="#fff" stroke-opacity=".6" stroke-dasharray="3 3"/>
-    </g>
-    <g transform="translate(250 152)">
-      <circle r="22" fill="#2e7d32" stroke="#fff" stroke-width="5" stroke-dasharray="6 6"/>
-      <circle r="12" fill="none" stroke="#fff" stroke-opacity=".6" stroke-dasharray="3 3"/>
-    </g>
-  </svg>
-</template>
+<form class="code-bar" id="code-form" autocomplete="off">
+  <p class="code-msg" id="code-msg" role="status" aria-live="polite"></p>
+  <label class="code-box" id="code-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <input id="code" type="text" placeholder="Enter a code" aria-label="Game code" maxlength="40"
+      autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button class="unlock" id="unlock" type="submit">Unlock</button>
+  </label>
+</form>
 
 <script>
-  // Add new games here. `art` is the id of a <template> holding the card picture.
-  const GAMES = [
-    {
-      title: 'Turbo Karts',
-      tag: 'Racing',
-      description: 'Drift, boost and throw bananas across 3 laps against 5 CPU racers.',
-      href: 'games/turbo-karts/index.html',
-      art: 'kart-art',
-      best: () => {
-        for (const d of ['hard', 'normal', 'easy']) {
-          const t = readNumber('turboKarts.best.' + d);
-          if (t) return `Best (${d}): <strong>${formatTime(t)}</strong>`;
-        }
-        return 'No races yet';
-      },
-    },
-    {
-      title: 'Golden Ace Casino',
-      tag: 'Cards',
-      description: 'Blackjack and Texas Hold\'em poker with chips that carry over between tables.',
-      href: 'games/casino/index.html',
-      art: 'casino-art',
-      best: () => `Chips: <strong>$${casinoChips().toLocaleString('en-US')}</strong>`,
-    },
+  // Every game is locked: its card (name, picture, link) is encrypted with its code, and the
+  // codes themselves are never stored here. tools/lock-games.mjs writes this block.
+  /* LOCKED:start */
+  const SALT = 'T+9eG36JBQhVmJpJtKdmsA==';
+  const ITERATIONS = 250000;
+  const LOCKED = [
+    { iv: 'fCY0rdxR6G7ppOTf', data: '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' },
+    { iv: 'KBOixzB+/7SS3oRp', data: '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' },
   ];
+  /* LOCKED:end */
 
-  const COMING_SOON = [
-    { emoji: '🔢', title: '2048' },
-    { emoji: '🐍', title: 'Snake' },
-    { emoji: '💣', title: 'Minesweeper' },
-    { emoji: '🃏', title: 'Memory Match' },
-  ];
+  const SAVED_KEY = 'arcade.codes';
+  // Codes ignore case, spaces and dashes.
+  const normalize = (code) => code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-  function casinoChips() {
-    try { if (localStorage.getItem('casino.balance') !== null) return readNumber('casino.balance'); } catch { /* storage unavailable */ }
-    return 1000;
+  const el = {
+    form: document.getElementById('code-form'),
+    box: document.getElementById('code-box'),
+    input: document.getElementById('code'),
+    button: document.getElementById('unlock'),
+    msg: document.getElementById('code-msg'),
+    games: document.getElementById('games'),
+    title: document.getElementById('games-title'),
+  };
+  const unlocked = new Map(); // LOCKED index -> card
+
+  function savedCodes() {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch { return []; }
+  }
+  function saveCodes(codes) {
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(codes)); } catch { /* storage unavailable */ }
   }
 
-  function readNumber(key) {
-    try { return Number(JSON.parse(localStorage.getItem(key))) || 0; } catch { return 0; }
+  // Every card the code opens, as [{ index, card }]. A wrong code opens none.
+  async function open(code) {
+    if (!window.crypto || !crypto.subtle) throw new Error('no-crypto');
+    const enc = new TextEncoder();
+    const base = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: bytes(SALT), iterations: ITERATIONS, hash: 'SHA-256' },
+      base,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt'],
+    );
+    const found = [];
+    for (const [index, box] of LOCKED.entries()) {
+      try {
+        const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(box.iv) }, key, bytes(box.data));
+        found.push({ index, card: JSON.parse(new TextDecoder().decode(plain)) });
+      } catch { /* locked with a different code */ }
+    }
+    return found;
   }
 
   function formatTime(s) {
     const m = Math.floor(s / 60);
-    const rest = (s - m * 60).toFixed(2).padStart(5, '0');
-    return `${m}:${rest}`;
+    return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`;
   }
 
-  const gamesEl = document.getElementById('games');
-  for (const g of GAMES) {
+  // The first stat with a saved value (or a fallback), e.g. "Chips: $1,000".
+  function statLine(card) {
+    for (const s of card.stats || []) {
+      let value = s.fallback;
+      try {
+        const raw = localStorage.getItem(s.key);
+        if (raw !== null) value = Number(JSON.parse(raw));
+      } catch { /* unreadable: use the fallback */ }
+      if (value === undefined || !Number.isFinite(value)) continue;
+      const strong = document.createElement('strong');
+      strong.textContent = s.format === 'time' ? formatTime(value) : `$${Math.round(value).toLocaleString('en-US')}`;
+      return [`${s.label}: `, strong];
+    }
+    return [card.empty || ''];
+  }
+
+  function cardEl(card) {
     const a = document.createElement('a');
     a.className = 'card';
-    a.href = g.href;
+    a.href = card.href;
     a.innerHTML = `
-      <div class="thumb"></div>
+      <div class="thumb">${card.art}</div>
       <div class="card-body">
-        <span class="tag">${g.tag}</span>
-        <h2>${g.title}</h2>
-        <p>${g.description}</p>
-        <div class="meta"><span class="best">${g.best()}</span><span class="play">Play</span></div>
+        <span class="tag"></span>
+        <h2></h2>
+        <p></p>
+        <div class="meta"><span class="best"></span><span class="play">Play</span></div>
       </div>`;
-    a.querySelector('.thumb').append(document.getElementById(g.art).content.cloneNode(true));
-    gamesEl.append(a);
+    a.querySelector('.tag').textContent = card.tag;
+    a.querySelector('h2').textContent = card.title;
+    a.querySelector('p').textContent = card.description;
+    a.querySelector('.best').append(...statLine(card));
+    return a;
   }
 
-  const comingEl = document.getElementById('coming');
-  for (const g of COMING_SOON) {
-    const div = document.createElement('div');
-    div.className = 'soon';
-    div.innerHTML = `<span class="emoji">${g.emoji}</span><span><b>${g.title}</b><small>Coming soon</small></span>`;
-    comingEl.append(div);
+  // Cards keep a fixed order; `fresh` ones play the unlock animation.
+  function render(fresh = new Set()) {
+    const cards = new Map();
+    for (const index of [...unlocked.keys()].sort((x, y) => x - y)) {
+      const a = cardEl(unlocked.get(index));
+      if (fresh.has(index)) a.classList.add('fresh');
+      cards.set(index, a);
+    }
+    el.games.replaceChildren(...cards.values());
+    el.title.hidden = unlocked.size === 0;
+    document.body.classList.toggle('empty', unlocked.size === 0);
+    return cards;
   }
 
-  document.getElementById('chips').textContent = `$${casinoChips().toLocaleString('en-US')}`;
+  let msgTimer = 0;
+  function say(text, kind) {
+    el.msg.textContent = text;
+    el.msg.className = `code-msg ${kind}`;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { el.msg.textContent = ''; }, 4000);
+  }
+
+  function flash(cls) {
+    el.box.classList.remove('wrong', 'right');
+    void el.box.offsetWidth;
+    el.box.classList.add(cls);
+    setTimeout(() => el.box.classList.remove(cls), 1200);
+  }
+
+  el.form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = normalize(el.input.value);
+    if (!code) { el.input.focus(); return; }
+    el.button.disabled = true;
+    let found = [];
+    try {
+      found = await open(code);
+    } catch {
+      el.button.disabled = false;
+      say('Codes only work when the site is opened over https.', 'bad');
+      return;
+    }
+    el.button.disabled = false;
+    if (!found.length) {
+      flash('wrong');
+      say('That code doesn\'t work.', 'bad');
+      el.input.select();
+      return;
+    }
+    el.input.value = '';
+    flash('right');
+    const codes = savedCodes();
+    if (!codes.includes(code)) saveCodes([...codes, code]);
+    const fresh = new Set(found.map((f) => f.index).filter((i) => !unlocked.has(i)));
+    for (const f of found) unlocked.set(f.index, f.card);
+    // Already unlocked: replay the glow on those cards instead.
+    const cards = render(fresh.size ? fresh : new Set(found.map((f) => f.index)));
+    const names = found.filter((f) => !fresh.size || fresh.has(f.index)).map((f) => f.card.title).join(' & ');
+    say(fresh.size ? `Unlocked ${names}!` : `You already have ${names}.`, 'ok');
+    cards.get(found[0].index).scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // Codes typed before are remembered in this browser, so unlocked games stay unlocked.
+  (async () => {
+    const codes = savedCodes();
+    const results = await Promise.all(codes.map((c) => open(c).catch(() => [])));
+    const still = codes.filter((c, i) => results[i].length);
+    if (still.length !== codes.length) saveCodes(still);
+    for (const f of results.flat()) unlocked.set(f.index, f.card);
+    render();
+  })();
+  if (window.matchMedia('(pointer: fine)').matches) el.input.focus();
 
   const suits = document.getElementById('suits');
   ['♠', '♥', '♦', '♣'].flatMap((s) => [s, s, s, s]).forEach((suit) => {
