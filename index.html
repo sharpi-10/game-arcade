@@ -64,8 +64,24 @@
   /* ---------- Unlocked games ---------- */
   main {
     position: relative; z-index: 1; max-width: 1040px; margin: 0 auto;
-    padding: max(40px, env(safe-area-inset-top)) 16px calc(170px + env(safe-area-inset-bottom));
+    padding: calc(96px + env(safe-area-inset-top)) 16px calc(170px + env(safe-area-inset-bottom));
   }
+
+  /* ---------- Your character, top left ---------- */
+  .me-chip {
+    position: fixed; z-index: 6; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+    display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 18px 0 5px; border-radius: 999px; cursor: pointer;
+    color: var(--text); font: inherit; text-align: left;
+    background: rgba(22, 26, 58, .85); border: 1px solid rgba(155, 107, 255, .5);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .4); backdrop-filter: blur(8px);
+    transition: border-color .2s, box-shadow .2s, transform .2s;
+  }
+  .me-chip:hover, .me-chip:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 0 24px rgba(69, 212, 255, .35); transform: translateY(-1px); }
+  .me-face { width: 46px; height: 46px; flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--me, var(--cyan)); }
+  .me-face svg { width: 100%; height: 100%; display: block; }
+  .me-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .me-text b { font: 400 14px Bungee, Rubik, sans-serif; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .me-text span { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
   .section-title {
     display: flex; align-items: center; gap: 16px; margin: 0 0 24px;
     font-family: Bungee, Rubik, sans-serif; font-size: 16px; letter-spacing: .14em;
@@ -190,6 +206,11 @@
 <div class="floor" aria-hidden="true"></div>
 <div class="shapes" id="shapes" aria-hidden="true"></div>
 
+<button class="me-chip" id="me-chip" type="button" aria-label="Your character, tickets, quests and prizes">
+  <span class="me-face" id="me-face"></span>
+  <span class="me-text"><b id="me-name"></b><span id="me-tix"></span></span>
+</button>
+
 <main>
   <div class="section-title" id="games-title" hidden>Your games</div>
   <div class="grid" id="games"></div>
@@ -205,6 +226,7 @@
   </label>
 </form>
 
+<script src="shared/arcade.js"></script>
 <script>
   // Every game is locked: its card (name, picture, link) is encrypted with its code, and the
   // codes themselves are never stored here. tools/lock-games.mjs writes this block.
@@ -302,10 +324,22 @@
     return a;
   }
 
+  // Each unlocked game brings its own quests and prizes for your character.
+  const loadedRewards = new Set();
+  function loadRewards(href) {
+    const dir = href.slice(0, href.lastIndexOf('/') + 1);
+    if (loadedRewards.has(dir)) return;
+    loadedRewards.add(dir);
+    const script = document.createElement('script');
+    script.src = `${dir}rewards.js`;
+    document.head.append(script);
+  }
+
   // Cards keep a fixed order; `fresh` ones play the unlock animation.
   function render(fresh = new Set()) {
     const cards = new Map();
     for (const index of [...unlocked.keys()].sort((x, y) => x - y)) {
+      loadRewards(unlocked.get(index).href);
       const a = cardEl(unlocked.get(index));
       if (fresh.has(index)) a.classList.add('fresh');
       cards.set(index, a);
@@ -374,6 +408,17 @@
     render();
   })();
   if (window.matchMedia('(pointer: fine)').matches) el.input.focus();
+
+  function renderMe() {
+    const me = Arcade.player;
+    document.getElementById('me-face').innerHTML = Arcade.character();
+    document.getElementById('me-name').textContent = me.name;
+    document.getElementById('me-tix').innerHTML = `${Arcade.ticketIcon}${me.tickets.toLocaleString('en-US')} tickets`;
+    document.documentElement.style.setProperty('--me', me.color);
+  }
+  renderMe();
+  Arcade.onChange(renderMe);
+  document.getElementById('me-chip').addEventListener('click', () => Arcade.open());
 
   // Drifting game-controller shapes: triangle, circle, square and cross.
   const SHAPES = [

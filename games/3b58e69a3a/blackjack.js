@@ -527,6 +527,7 @@ async function settle(s) {
     }
     await sleep(160);
   }
+  for (const r of results) Arcade.record('bj.hand', { result: r.kind });
 
   if (results.some((r) => r.kind === 'blackjack')) {
     fx.banner(`Blackjack!<small>+${fmt(net)}</small>`, 'win', 2000);

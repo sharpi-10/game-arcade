@@ -31,6 +31,7 @@ const wallet = {
     this.balance = Math.max(0, Math.round(this.balance + n));
     store.set('casino.balance', this.balance);
     animateBalance(n);
+    Arcade.record('casino.chips', { chips: this.balance });
   },
   // Chips sitting on a table (an undealt bet, a poker stack) are remembered so a reload hands them back.
   hold(game, amount) { store.set(`casino.held.${game}`, amount); },

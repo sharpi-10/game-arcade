@@ -137,52 +137,12 @@
   </div>
 </div>
 
-<div class="modal profile-modal" id="profile-modal" hidden>
-  <div class="modal-panel profile-panel" role="dialog" aria-modal="true" aria-labelledby="profile-title" tabindex="-1">
-    <header class="pf-head">
-      <h2 id="profile-title">Your Character</h2>
-      <button class="icon-btn" id="profile-close" aria-label="Close">✕</button>
-    </header>
-    <div class="pf-body">
-      <div class="pf-preview">
-        <div class="pf-big-avatar" id="pf-big-avatar"></div>
-        <div class="plate" id="pf-plate">
-          <div class="avatar"></div>
-          <div class="seat-info">
-            <div class="seat-name"><span class="nm"></span></div>
-            <div class="seat-stack">$1,000</div>
-          </div>
-        </div>
-        <div class="pf-cards" id="pf-cards"><canvas data-w="64"></canvas><canvas data-w="64"></canvas></div>
-        <button class="btn ghost pf-random" id="pf-random">🎲 Surprise me</button>
-      </div>
-      <div class="pf-options">
-        <label class="pf-section">
-          <span class="pf-label">Name</span>
-          <input class="pf-input" id="pf-name" type="text" placeholder="You" autocomplete="off" spellcheck="false">
-        </label>
-        <div class="pf-section">
-          <span class="pf-label">Avatar</span>
-          <div class="pf-avatars" id="pf-avatars"></div>
-        </div>
-        <div class="pf-section">
-          <span class="pf-label">Color</span>
-          <div class="pf-colors" id="pf-colors"></div>
-        </div>
-        <div class="pf-section">
-          <span class="pf-label">Card back</span>
-          <div class="pf-backs" id="pf-backs"></div>
-        </div>
-      </div>
-    </div>
-    <footer class="pf-foot"><button class="btn gold" id="profile-done">Done</button></footer>
-  </div>
-</div>
-
 <div id="fx" aria-hidden="true"></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
 <div class="banner" id="banner" role="status"></div>
 
+<script src="../../shared/arcade.js"></script>
+<script src="rewards.js"></script>
 <script src="common.js"></script>
 <script src="profile.js"></script>
 <script src="table3d.js"></script>

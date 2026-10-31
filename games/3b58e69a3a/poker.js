@@ -403,7 +403,9 @@ function buildSeats() {
 
 function renderSeat(p) {
   const v = p.view;
-  v.seat.querySelector('.avatar').textContent = p.avatar;
+  const avatar = v.seat.querySelector('.avatar');
+  if (p.isHuman) avatar.innerHTML = profile.avatar();
+  else avatar.textContent = p.avatar;
   v.seat.querySelector('.nm').textContent = p.name;
   v.seat.style.setProperty('--accent', p.color);
   v.seat.querySelector('.seat-stack').textContent = p.allIn && p.stack === 0 && handRunning ? 'All-in' : fmt(p.stack);
@@ -444,7 +446,9 @@ function showNext(show) {
 }
 
 function saveHumanStack() {
-  wallet.hold('poker', human() ? human().stack : 0);
+  const stack = human() ? human().stack : 0;
+  wallet.hold('poker', stack);
+  Arcade.record('casino.chips', { chips: wallet.balance + stack });
 }
 
 // ---------- Hint for the human ----------
@@ -850,6 +854,7 @@ async function showdown(s) {
     potLabel.hide();
     await award(w, amount);
     if (w.isHuman) {
+      Arcade.record('poker.pot', { amount, category: -1, showdown: false });
       fx.banner(`You win<small>+${fmt(amount)}</small>`, 'win');
       sound.win();
       fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.55, 70);
@@ -899,6 +904,7 @@ async function showdown(s) {
 
   const hand = describe(headline[0].score);
   if (humanWon > 0) {
+    Arcade.record('poker.pot', { amount: humanWon, category: Math.floor(human().score / CATEGORY_SIZE), showdown: true });
     const big = humanWon >= 400 || Math.floor(headline[0].score / CATEGORY_SIZE) >= 4;
     fx.banner(`${headline.length > 1 ? 'Split pot' : 'You win'}<small>+${fmt(humanWon)} · ${hand}</small>`, 'win', 2200);
     if (big) { sound.bigWin(); fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.5, 160); } else { sound.win(); fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.55, 70); }
@@ -947,7 +953,7 @@ function sitDown(amount) {
   setTimeout(() => { if (s === session) playHand(); }, 700);
 }
 
-const myLook = () => ({ name: profile.name, avatar: profile.avatar, color: profile.color, aggr: 0, loose: 0, bluff: 0 });
+const myLook = () => ({ name: profile.name, color: profile.color, aggr: 0, loose: 0, bluff: 0 });
 
 function setupTable() {
   // Clear anything left from a previous visit.
@@ -988,7 +994,7 @@ new ResizeObserver(() => { if (t3 && t3.active) applyLayout(); }).observe(el.sta
 profile.onChange(() => {
   const me = human();
   if (!me || !me.view) return;
-  Object.assign(me, { name: profile.name, avatar: profile.avatar, color: profile.color });
+  Object.assign(me, { name: profile.name, color: profile.color });
   renderSeat(me);
 });
 

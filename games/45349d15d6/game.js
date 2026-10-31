@@ -47,9 +47,21 @@ const ITEM_ICONS = { boost: '⚡', banana: '🍌', rocket: '🚀' };
 const NO_INPUT = { throttle: 0, steer: 0, drift: false, item: false };
 
 const settings = {
-  color: clamp(store.get('turboKarts.color', 0), 0, KART_COLORS.length - 1),
   difficulty: DIFFICULTIES[store.get('turboKarts.difficulty', 'normal')] ? store.get('turboKarts.difficulty', 'normal') : 'normal',
 };
+
+// Your kart paint is part of your arcade character. Carry over a colour picked before that.
+const OLD_PAINTS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+const oldColor = store.get('turboKarts.color', null);
+if (oldColor !== null) {
+  if (Arcade.player.look.kartPaint === 'red' && OLD_PAINTS[oldColor]) Arcade.setLook({ kartPaint: OLD_PAINTS[oldColor] }, { quiet: true });
+  try { localStorage.removeItem('turboKarts.color'); } catch { /* storage unavailable */ }
+}
+function paintHex() {
+  const id = Arcade.player.look.kartPaint;
+  const item = Arcade.owns('kartPaint', id) && Arcade.item('kartPaint', id);
+  return parseInt((item ? item.swatch : '#e53935').slice(1), 16);
+}
 
 // ---------- Renderer, scene, camera ----------
 const canvas = $('game');
@@ -456,8 +468,8 @@ function buildKartModel(color) {
   const wheel = add(new THREE.TorusGeometry(0.32, 0.07, 6, 14), MAT.dark, 0, 1.35, 0.55);
   wheel.rotation.x = -0.6;
   add(new THREE.CylinderGeometry(0.5, 0.6, 0.9, 10), MAT.suit, 0, 1.4, -0.45);
-  add(new THREE.SphereGeometry(0.58, 16, 12), paint, 0, 2.2, -0.4);
-  add(new THREE.BoxGeometry(0.8, 0.28, 0.3), MAT.visor, 0, 2.25, 0.05);
+  const helmet = add(new THREE.SphereGeometry(0.58, 16, 12), paint, 0, 2.2, -0.4);
+  const visor = add(new THREE.BoxGeometry(0.8, 0.28, 0.3), MAT.visor, 0, 2.25, 0.05);
 
   const pipeGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.6, 8);
   const flames = [];
@@ -501,7 +513,7 @@ function buildKartModel(color) {
   shadow.position.y = 0.08;
   root.add(shadow);
 
-  return { root, body, wheels, steerers, flames, sparks, sparkMat };
+  return { root, body, wheels, steerers, flames, sparks, sparkMat, helmet, visor };
 }
 
 function buildBanana() {
@@ -636,7 +648,10 @@ class Kart {
 
   get progress() { return this.lap * SAMPLES + this.idx; }
 
-  dispose() { scene.remove(this.model.root); }
+  dispose() {
+    scene.remove(this.model.root);
+    if (this.model.head) { this.model.head.material.map.dispose(); this.model.head.material.dispose(); }
+  }
 }
 
 // ---------- Game state ----------
@@ -659,12 +674,34 @@ let camHeading = 0;
 let shake = 0;
 let menuAngle = 0;
 
+// Your character drives your kart: a cut-out of their head replaces the helmet.
+function addDriverHead(k) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const tex = new THREE.CanvasTexture(c);
+  const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  head.scale.set(2.3, 2.3, 1);
+  head.position.set(0, 2.45, -0.45);
+  k.model.body.add(head);
+  k.model.head = head;
+  k.model.helmet.visible = false;
+  k.model.visor.visible = false;
+  const img = new Image();
+  img.onload = () => {
+    c.getContext('2d').drawImage(img, 0, 0, 256, 256);
+    tex.needsUpdate = true;
+  };
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(Arcade.character(undefined, { bg: false, crop: 'head' }))}`;
+}
+
 function setupKarts() {
   karts.forEach((k) => k.dispose());
-  const others = KART_COLORS.filter((_, i) => i !== settings.color);
+  const mine = paintHex();
+  const others = KART_COLORS.filter((c) => c !== mine).slice(0, 5);
   const diff = DIFFICULTIES[settings.difficulty];
   karts = others.map((c, i) => new Kart(CPU_NAMES[i], c, false));
-  player = new Kart('You', KART_COLORS[settings.color], true);
+  player = new Kart(Arcade.player.name, mine, true);
+  addDriverHead(player);
   karts.push(player);
   const skills = [1.04, 1.02, 1.0, 0.97, 0.95];
   karts.forEach((k, slot) => {
@@ -1380,6 +1417,7 @@ function finishRace() {
   const best = store.get(key, 0);
   player.newRecord = !best || player.finishTime < best;
   if (player.newRecord) store.set(key, player.finishTime);
+  Arcade.record('race', { place, difficulty: settings.difficulty, time: player.finishTime });
   resultsTimer = 2.6;
 }
 
@@ -1479,22 +1517,27 @@ function frame(now) {
 
 // ---------- Menus & buttons ----------
 function renderMenu() {
+  const me = Arcade.player;
+  $('driver-face').innerHTML = Arcade.character();
+  $('driver-name').textContent = me.name;
+  $('driver-tix').innerHTML = `${Arcade.ticketIcon}${me.tickets.toLocaleString('en-US')} tickets`;
+  // Paints you don't own yet show a lock and open the prize screen on that paint.
   const sw = $('swatches');
   sw.innerHTML = '';
-  KART_COLORS.forEach((c, i) => {
+  for (const p of Arcade.items('kartPaint')) {
+    const own = Arcade.owns('kartPaint', p.id);
     const b = document.createElement('button');
-    b.className = 'swatch';
-    b.style.background = `#${c.toString(16).padStart(6, '0')}`;
-    b.setAttribute('aria-label', `Kart colour ${i + 1}`);
-    b.setAttribute('aria-pressed', String(i === settings.color));
+    b.className = `swatch${own ? '' : ' locked'}`;
+    b.style.background = p.swatch;
+    b.title = own ? p.name : `${p.name}: ${p.price ? `${p.price} tickets` : 'quest reward'}`;
+    b.setAttribute('aria-label', b.title);
+    b.setAttribute('aria-pressed', String(own && p.id === me.look.kartPaint));
     b.onclick = () => {
-      settings.color = i;
-      store.set('turboKarts.color', i);
-      setupKarts();
-      renderMenu();
+      if (own) Arcade.setLook({ kartPaint: p.id });
+      else Arcade.open({ slot: 'kartPaint', item: p.id });
     };
     sw.append(b);
-  });
+  }
   document.querySelectorAll('#difficulty button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.d === settings.difficulty));
   });
@@ -1517,6 +1560,13 @@ function toggleMute() {
   $('mute-btn').textContent = audio.muted ? '🔇' : '🔊';
 }
 
+$('driver-btn').onclick = () => Arcade.open();
+// A new look or paint shows up on the grid straight away.
+Arcade.onChange(() => {
+  if (state !== 'menu') return;
+  setupKarts();
+  renderMenu();
+});
 $('start-btn').onclick = startRace;
 $('again-btn').onclick = startRace;
 $('restart-btn').onclick = startRace;

@@ -1,0 +1,34 @@
+// The casino's part of the arcade character: card backs, titles, quests and ticket payouts.
+// The game reports what happens with Arcade.record(); this file decides what it's worth.
+Arcade.register({
+  id: 'casino',
+  title: 'Golden Ace Casino',
+  slots: [{ id: 'cardBack', name: 'Card back', default: 'classic', shape: 'card' }],
+  items: [
+    { slot: 'cardBack', id: 'classic', name: 'Classic', swatch: 'linear-gradient(135deg, #b8202f, #6a0d18)' },
+    { slot: 'cardBack', id: 'royal', name: 'Royal', swatch: 'linear-gradient(135deg, #2f63e0, #0f2266)' },
+    { slot: 'cardBack', id: 'midnight', name: 'Midnight', swatch: 'linear-gradient(135deg, #34343e, #0a0a0e)' },
+    { slot: 'cardBack', id: 'jade', name: 'Jade', quest: true, swatch: 'linear-gradient(135deg, #1a9a5c, #063a22)' },
+    { slot: 'cardBack', id: 'velvet', name: 'Velvet', price: 200, swatch: 'linear-gradient(135deg, #8a3bd1, #2d0b52)' },
+    { slot: 'cardBack', id: 'sunset', name: 'Sunset', price: 250, swatch: 'linear-gradient(135deg, #ff9b42, #b0225a)' },
+    { slot: 'title', id: 'cardShark', name: 'Card shark', quest: true },
+    { slot: 'title', id: 'highRoller', name: 'High roller', quest: true },
+  ],
+  payouts: {
+    'bj.hand': (d) => {
+      if (d.result === 'blackjack') return { tickets: 15, reason: 'Blackjack!' };
+      if (d.result === 'win') return { tickets: 5, reason: 'Hand won' };
+      return null;
+    },
+    // category: 0 high card … 5 flush … 8 straight flush.
+    'poker.pot': (d) => ({ tickets: d.category >= 5 ? 20 : 8, reason: 'Pot won' }),
+  },
+  quests: [
+    { id: 'casino.bj', title: 'Twenty-one', desc: 'Get a blackjack.', goal: 1, on: 'bj.hand', when: (d) => d.result === 'blackjack', reward: { tickets: 40 } },
+    { id: 'casino.bj10', title: 'Hot streak', desc: 'Win 10 blackjack hands.', goal: 10, on: 'bj.hand', when: (d) => d.result === 'win' || d.result === 'blackjack', reward: { tickets: 60, items: ['cardBack:jade'] } },
+    { id: 'casino.pot', title: 'Take it down', desc: 'Win a poker pot.', goal: 1, on: 'poker.pot', reward: { tickets: 40 } },
+    { id: 'casino.flush', title: 'Flush with cash', desc: 'Win a poker showdown with a flush or better.', goal: 1, on: 'poker.pot', when: (d) => d.showdown && d.category >= 5, reward: { items: ['glasses:shades'] } },
+    { id: 'casino.shark', title: 'Card shark', desc: 'Win 25 poker pots.', goal: 25, on: 'poker.pot', reward: { tickets: 200, items: ['title:cardShark'] } },
+    { id: 'casino.roller', title: 'High roller', desc: 'Have $5,000 in casino chips.', goal: 5000, on: 'casino.chips', mode: 'max', value: (d) => d.chips, reward: { items: ['hat:tophat', 'outfit:tux', 'title:highRoller'] } },
+  ],
+});
