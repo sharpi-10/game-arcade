@@ -1,20 +1,21 @@
 (() => {
 'use strict';
 
-const { $, $$, sleep, rand, fmt, wallet, sound, ABORT, cards, chips, fx } = Casino;
+const { $, $$, sleep, rand, fmt, wallet, sound, ABORT, cards, fx, Table3D, profile } = Casino;
+const { V, speckle, roundRect } = Table3D;
 
 const SB = 10;
 const BB = 20;
 const BOT_STACK = 1000;
 const BUY_INS = [500, 1000, 2000];
 const BOTS = [
-  { name: 'Foxy', avatar: '🦊', aggr: 0.6, loose: 0.55, bluff: 0.12 },
-  { name: 'Bruno', avatar: '🐻', aggr: 0.3, loose: 0.3, bluff: 0.04 },
-  { name: 'Mei', avatar: '🐼', aggr: 0.45, loose: 0.65, bluff: 0.1 },
-  { name: 'Tigra', avatar: '🐯', aggr: 0.85, loose: 0.6, bluff: 0.2 },
-  { name: 'Ollie', avatar: '🦉', aggr: 0.4, loose: 0.35, bluff: 0.07 },
-  { name: 'Rex', avatar: '🦖', aggr: 0.75, loose: 0.75, bluff: 0.16 },
-  { name: 'Coco', avatar: '🐵', aggr: 0.55, loose: 0.8, bluff: 0.14 },
+  { name: 'Foxy', avatar: '🦊', color: '#ff8a3d', aggr: 0.6, loose: 0.55, bluff: 0.12 },
+  { name: 'Bruno', avatar: '🐻', color: '#c98b5a', aggr: 0.3, loose: 0.3, bluff: 0.04 },
+  { name: 'Mei', avatar: '🐼', color: '#67e8f9', aggr: 0.45, loose: 0.65, bluff: 0.1 },
+  { name: 'Tigra', avatar: '🐯', color: '#f5c84c', aggr: 0.85, loose: 0.6, bluff: 0.2 },
+  { name: 'Ollie', avatar: '🦉', color: '#b07cff', aggr: 0.4, loose: 0.35, bluff: 0.07 },
+  { name: 'Rex', avatar: '🦖', color: '#34d399', aggr: 0.75, loose: 0.75, bluff: 0.16 },
+  { name: 'Coco', avatar: '🐵', color: '#ff7ab6', aggr: 0.55, loose: 0.8, bluff: 0.14 },
 ];
 
 // ---------- Hand evaluation ----------
@@ -149,12 +150,11 @@ function equity(hole, board, opponents, iters = 300) {
 
 // ---------- Table state ----------
 const el = {
-  room: $('#pk-room'), deck: $('#pk-deck'), board: $('#pk-board'), pot: $('#pk-pot'),
-  potStack: $('#pk-pot .stack'), potLabel: $('#pk-pot-label'), status: $('#pk-status'), next: $('#pk-next'),
-  dealer: $('#pk-dealer'), actions: $('#pk-actions'), fold: $('#pk-fold'), call: $('#pk-call'),
+  stage: $('#pk-stage'), next: $('#pk-next'),
+  actions: $('#pk-actions'), fold: $('#pk-fold'), call: $('#pk-call'),
   raise: $('#pk-raise'), raiseBox: $('#pk-raise-box'), slider: $('#pk-slider'),
   buyin: $('#pk-buyin'), buyinOptions: $('#pk-buyin-options'), buyinText: $('#pk-buyin-text'),
-  buyinRefill: $('#pk-buyin-refill'),
+  buyinRefill: $('#pk-buyin-refill'), balance: $('#balance'),
 };
 
 let players = [];
@@ -176,6 +176,187 @@ const potTotal = () => players.reduce((a, p) => a + p.total, 0);
 const collected = () => players.reduce((a, p) => a + p.total - p.bet, 0);
 const nextSeat = (i) => (i + 1) % players.length;
 
+// ---------- 3D table ----------
+// Two layouts of the same oval table: wide for computers and landscape screens, and turned
+// upright for phones. Seat 0 (you) is always nearest the camera; seats go clockwise.
+// Positions are [x, z] on the felt.
+const LAYOUTS = {
+  wide: {
+    table: { a: 8.6, b: 4.6, upright: false },
+    seats: [
+      { plate: [0, 5.5], cards: [0, 2.75], yaw: 0, bet: [2.0, 2.45], button: [-1.9, 2.95] },
+      { plate: [-9.6, 0], cards: [-6.3, 0], yaw: -Math.PI / 2, bet: [-4.5, 1.25], button: [-6.1, -1.7] },
+      { plate: [0, -5.7], cards: [0, -3.1], yaw: Math.PI, bet: [2.6, -2.9], button: [-2.0, -3.2] },
+      { plate: [9.6, 0], cards: [6.3, 0], yaw: Math.PI / 2, bet: [4.5, -1.25], button: [6.1, 1.7] },
+    ],
+    board: { z: 0.15, gap: 1.22 },
+    pot: [0, -1.9],
+    potLabel: [0, -1.15],
+    deck: [-3.6, -1.9],
+    status: [0, 1.5],
+    view: { elevation: 46, target: [0, 0, 0.4], width: 21, depth: 12 },
+  },
+  // On phones the side players' nameplates sit above their cards instead of at the screen edge.
+  tall: {
+    table: { a: 7.6, b: 4.6, upright: true },
+    seats: [
+      { plate: [0, 8.2], cards: [0, 5.3], yaw: 0, bet: [1.9, 4.2], button: [-1.9, 5.1] },
+      { plate: [-3.0, -4.3], cards: [-2.6, -2.2], yaw: -Math.PI / 2, bet: [-1.6, -0.5], button: [-3.6, -0.4] },
+      { plate: [0, -9.6], cards: [0, -6.0], yaw: Math.PI, bet: [-1.0, -4.5], button: [-1.8, -6.2] },
+      { plate: [3.0, -4.3], cards: [2.6, -2.2], yaw: Math.PI / 2, bet: [1.6, -0.5], button: [3.6, -0.4] },
+    ],
+    board: { z: 0.9, gap: 1.18 },
+    pot: [0, -2.4],
+    potLabel: [0, -1.65],
+    deck: [0.9, -5.0],
+    status: [0, 2.9],
+    view: { elevation: 72, target: [0, 0, 0.2], width: 10.2, depth: 15.5 },
+  },
+};
+
+let t3 = null;
+let tables = null;
+let layoutName = 'wide';
+let pot = null;
+let potLabel = null;
+let statusLabel = null;
+let deckMesh = null;
+let dealerButton = null;
+let layoutPending = true;
+const L = () => LAYOUTS[layoutName];
+const at = ([x, z], y = 0) => V(x, y, z);
+
+function stadium(a, b, upright) {
+  const pts = [];
+  const c = a - b;
+  for (let i = 0; i <= 40; i++) {
+    const t = -Math.PI / 2 + (i / 40) * Math.PI;
+    pts.push([c + b * Math.cos(t), b * Math.sin(t)]);
+  }
+  for (let i = 0; i <= 40; i++) {
+    const t = Math.PI / 2 + (i / 40) * Math.PI;
+    pts.push([-c + b * Math.cos(t), b * Math.sin(t)]);
+  }
+  return upright ? pts.map(([x, z]) => [z, x]) : pts;
+}
+
+function buildTables() {
+  t3 = Table3D.create(el.stage, { bottomInset: () => el.actions.offsetHeight });
+  tables = {};
+  for (const [name, lay] of Object.entries(LAYOUTS)) {
+    const { a, b, upright } = lay.table;
+    const outline = stadium(a, b, upright);
+    tables[name] = t3.addTable({
+      outline,
+      railRadius: 0.48,
+      drawFelt(g, map, s, cw, ch) {
+        const [gx, gy] = map(0, 0);
+        const grd = g.createRadialGradient(gx, gy, 0, gx, gy, Math.max(cw, ch) * 0.6);
+        grd.addColorStop(0, '#20995c');
+        grd.addColorStop(0.55, '#127245');
+        grd.addColorStop(1, '#063a22');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, cw, ch);
+        speckle(g, cw, ch, 50000, 0.05);
+        // Faint outlines where the five board cards go.
+        g.strokeStyle = 'rgba(255,255,255,.14)';
+        g.lineWidth = 0.025 * s;
+        for (let i = 0; i < 5; i++) {
+          const [px, py] = map((i - 2) * lay.board.gap - 0.58, lay.board.z - 0.8);
+          roundRect(g, px, py, 1.16 * s, 1.6 * s, 0.1 * s);
+          g.stroke();
+        }
+      },
+    });
+  }
+
+  const back = t3.makeCard({ r: 14, s: 0 }).group;
+  t3.scene.remove(back);
+  deckMesh = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const c = back.clone();
+    c.rotation.set(0, (Math.random() - 0.5) * 0.06, Math.PI);
+    c.position.y = 0.012 + i * 0.012;
+    deckMesh.add(c);
+  }
+  t3.scene.add(deckMesh);
+
+  // The word is sized to sit inside the inner ring, and the puck is turned so it reads from your seat.
+  const drawButton = (g) => {
+    g.fillStyle = '#f4f1ea';
+    g.fillRect(0, 0, 256, 256);
+    g.strokeStyle = '#1a1a1a';
+    g.lineWidth = 7;
+    g.beginPath(); g.arc(128, 128, 112, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = 2.5;
+    g.beginPath(); g.arc(128, 128, 98, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#1a1a1a';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = '800 60px Rubik, Arial, sans-serif';
+    const size = 60 * Math.min(1, 148 / g.measureText('DEALER').width);
+    g.font = `800 ${size}px Rubik, Arial, sans-serif`;
+    g.fillText('DEALER', 128, 131);
+    g.font = '26px Georgia, serif';
+    g.fillText('★', 128, 76);
+    g.fillText('★', 128, 182);
+  };
+  const face = Table3D.texture(256, 256, drawButton);
+  if (document.fonts) document.fonts.ready.then(() => { drawButton(face.image.getContext('2d')); face.needsUpdate = true; });
+  const white = new THREE.MeshStandardMaterial({ color: 0xe9e6de, roughness: 0.4 });
+  const top = new THREE.MeshStandardMaterial({ map: face, roughness: 0.4 });
+  dealerButton = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.12, 40), [white, top, white]);
+  dealerButton.castShadow = true;
+  dealerButton.position.y = 0.06;
+  dealerButton.rotation.y = Math.PI / 2;
+  t3.scene.add(dealerButton);
+
+  pot = t3.stack(V(), { label: false });
+  potLabel = t3.label('pot-label', () => at(L().potLabel));
+  potLabel.hide();
+  statusLabel = t3.label('pk-status', () => at(L().status));
+}
+
+function cardSlot(p, i) {
+  const s = L().seats[p.seat];
+  const spread = p.revealed || p.isHuman ? 0.6 : 0.36;
+  const lx = (i ? 1 : -1) * spread;
+  const yaw = p.revealed ? 0 : s.yaw;
+  // Revealed cards turn to face the camera and slide a little further onto the felt.
+  const [cx, cz] = p.revealed ? [s.cards[0] * 0.85, s.cards[1] * 0.92] : s.cards;
+  return { x: cx + lx * Math.cos(yaw), y: 0.012 + i * 0.006, z: cz - lx * Math.sin(yaw), yaw };
+}
+const boardSlot = (i) => ({ x: (i - 2) * L().board.gap, y: 0.012, z: L().board.z, yaw: 0 });
+const platePoint = (p) => at(L().seats[p.seat].plate, 0.5);
+const deckTop = () => at(L().deck, 0.1);
+const balancePoint = () => t3.screenPoint(el.balance, 5);
+
+function setView(dur = 900) {
+  const v = L().view;
+  return t3.setView({ fov: 40, elevation: v.elevation, width: v.width, depth: v.depth, target: at(v.target) }, dur);
+}
+
+// Pick the layout that suits the screen and move everything into place.
+function applyLayout(force = false) {
+  const r = el.stage.getBoundingClientRect();
+  if (!r.width || !r.height) { layoutPending = true; return; }
+  const name = r.width / Math.max(1, r.height - el.actions.offsetHeight) < 0.9 ? 'tall' : 'wide';
+  if (name === layoutName && !force && !layoutPending) return;
+  layoutPending = false;
+  layoutName = name;
+  for (const [n, t] of Object.entries(tables)) t.group.visible = n === name;
+  deckMesh.position.copy(at(L().deck));
+  deckMesh.rotation.y = name === 'tall' ? 0.2 : -0.25;
+  dealerButton.position.copy(at(L().seats[buttonSeat].button, 0.06));
+  pot.moveTo(at(L().pot), 0);
+  for (const p of players) {
+    p.cards.forEach((c, i) => { if (c.obj) t3.moveCard(c, cardSlot(p, i), 0); });
+    p.view.betStack.moveTo(at(L().seats[p.seat].bet), 0);
+  }
+  board.forEach((c, i) => { if (c.obj) t3.moveCard(c, boardSlot(i), 0); });
+  setView(0);
+}
+
 function pickBot() {
   const free = BOTS.filter((b) => !usedBots.has(b.name));
   const bot = free[Math.floor(Math.random() * free.length)];
@@ -183,20 +364,19 @@ function pickBot() {
   return bot;
 }
 
-function makePlayer(seat, profile, stack, isHuman = false) {
+function makePlayer(seat, look, stack, isHuman = false) {
   return {
-    seat, isHuman, stack, name: profile.name, avatar: profile.avatar, style: profile,
-    cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false,
+    seat, isHuman, stack, name: look.name, avatar: look.avatar, color: look.color, style: look,
+    cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false, revealed: false,
   };
 }
 
 function buildSeats() {
-  $$('.seat', el.room).forEach((s) => s.remove());
-  players.forEach((p, i) => {
-    const s = document.createElement('div');
-    s.className = `seat seat-${i}${p.isHuman ? ' me' : ''}`;
+  for (const p of players) {
+    if (p.view) continue;
+    const label = t3.label(`seat seat-${p.seat}${p.isHuman ? ' me' : ''}`, () => at(L().seats[p.seat].plate), { clamp: true });
+    const s = label.el;
     s.innerHTML = `
-      <div class="hand"></div>
       <div class="plate">
         <div class="avatar"></div>
         <div class="seat-info">
@@ -204,19 +384,20 @@ function buildSeats() {
           <div class="seat-stack"></div>
         </div>
         <div class="bubble"></div>
+        ${p.isHuman ? '<button class="edit-me" type="button" aria-label="Customize your character" title="Customize your character">✎</button>' : ''}
         ${p.isHuman ? '<div class="pk-hint"><b class="hint-hand"></b><span class="hint-odds"></span><div class="meter"><i></i></div></div>' : ''}
-      </div>
-      <div class="seat-bet"><div class="stack empty"></div></div>`;
-    el.room.append(s);
+      </div>`;
     p.view = {
+      label,
       seat: s,
-      cards: s.querySelector('.hand'),
       plate: s.querySelector('.plate'),
       bubble: s.querySelector('.bubble'),
-      bet: s.querySelector('.seat-bet .stack'),
+      betStack: t3.stack(at(L().seats[p.seat].bet)),
     };
+    const edit = s.querySelector('.edit-me');
+    if (edit) edit.addEventListener('click', () => profile.open());
     renderSeat(p);
-  });
+  }
   hideHint();
 }
 
@@ -224,6 +405,7 @@ function renderSeat(p) {
   const v = p.view;
   v.seat.querySelector('.avatar').textContent = p.avatar;
   v.seat.querySelector('.nm').textContent = p.name;
+  v.seat.style.setProperty('--accent', p.color);
   v.seat.querySelector('.seat-stack').textContent = p.allIn && p.stack === 0 && handRunning ? 'All-in' : fmt(p.stack);
   v.seat.classList.toggle('folded', p.folded);
 }
@@ -240,21 +422,20 @@ function setTurn(p) {
   players.forEach((o) => o.view.seat.classList.toggle('turn', o === p));
 }
 
-// The dealer button always sits on the top-right corner of the dealer's nameplate.
 function moveDealerButton() {
-  const plate = players[buttonSeat].view.plate.getBoundingClientRect();
-  const room = el.room.getBoundingClientRect();
-  el.dealer.style.left = `${Math.min(plate.right - room.left - 20, room.width - 32)}px`;
-  el.dealer.style.top = `${plate.top - room.top - 12}px`;
+  return t3.moveObject(dealerButton, at(L().seats[buttonSeat].button, 0.06), 600);
 }
 
 function updatePot() {
-  const amount = collected();
-  chips.renderStack(el.potStack, amount, { pop: false });
-  el.potLabel.textContent = `Pot ${fmt(potTotal())}`;
+  pot.set(collected(), { pop: false });
+  if (potTotal()) potLabel.show(`Pot ${fmt(potTotal())}`);
+  else potLabel.hide();
 }
 
-function setStatus(text) { el.status.textContent = text; }
+function setStatus(text) {
+  if (text) statusLabel.show(text);
+  else statusLabel.hide();
+}
 
 // Between hands the action dock swaps for a single "Deal next hand" button.
 function showNext(show) {
@@ -269,13 +450,13 @@ function saveHumanStack() {
 // ---------- Hint for the human ----------
 let hintTimer = 0;
 function hideHint() {
-  const hint = $('.pk-hint', el.room);
+  const hint = $('.pk-hint', el.stage);
   if (hint) hint.style.visibility = 'hidden';
 }
 
 function updateHint() {
   const me = human();
-  const hint = $('.pk-hint', el.room);
+  const hint = $('.pk-hint', el.stage);
   if (!hint || !me || me.cards.length < 2) return;
   if (me.folded) { hint.style.visibility = 'hidden'; return; }
   hint.style.visibility = 'visible';
@@ -299,8 +480,8 @@ async function putChips(p, amount) {
   if (p.stack === 0) p.allIn = true;
   if (p.isHuman) saveHumanStack();
   renderSeat(p);
-  await chips.fly(p.view.plate, p.view.bet, amount, { max: 4, dur: 380 });
-  chips.renderStack(p.view.bet, p.bet);
+  await t3.flyChips(platePoint(p), p.view.betStack.top(), amount, { max: 4, dur: 380 });
+  p.view.betStack.set(p.bet);
   updatePot();
 }
 
@@ -309,9 +490,9 @@ async function collectBets() {
   if (!betting.length) return;
   await sleep(250);
   await Promise.all(betting.map((p) => {
-    const amount = p.bet;
-    chips.renderStack(p.view.bet, 0, { pop: false });
-    return chips.fly(p.view.bet, el.potStack, amount, { max: 4, dur: 450 });
+    const from = p.view.betStack.top();
+    p.view.betStack.set(0);
+    return t3.flyChips(from, pot.top(), p.bet, { max: 4, dur: 450 });
   }));
   players.forEach((p) => { p.bet = 0; });
   updatePot();
@@ -320,7 +501,7 @@ async function collectBets() {
 async function award(p, amount) {
   p.stack += amount;
   if (p.isHuman) saveHumanStack();
-  await chips.fly(el.potStack, p.view.plate, amount, { max: 7, dur: 600 });
+  await t3.flyChips(pot.top(), platePoint(p), amount, { max: 7, dur: 600 });
   renderSeat(p);
   fx.floatText(p.view.plate, `+${fmt(amount)}`, 'win');
 }
@@ -341,12 +522,12 @@ async function runHand(s) {
   handRunning = true;
 
   // Clear the last hand away.
-  const old = [...el.board.children, ...players.flatMap((p) => [...p.view.cards.children])];
+  const old = [...board, ...players.flatMap((p) => p.cards)];
   players.forEach((p) => {
     p.view.bubble.textContent = '';
     p.view.seat.classList.remove('winner', 'turn');
   });
-  if (old.length) await cards.sweep(old, el.deck, { stagger: 20 });
+  if (old.length) await t3.sweep(old, deckTop);
   alive(s);
 
   // Busted bots leave and new ones sit down.
@@ -363,7 +544,7 @@ async function runHand(s) {
     alive(s);
   }
 
-  players.forEach((p) => Object.assign(p, { cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false }));
+  players.forEach((p) => Object.assign(p, { cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false, revealed: false }));
   players.forEach(renderSeat);
   board = [];
   deck = cards.makeDeck(1);
@@ -388,7 +569,7 @@ async function runHand(s) {
       const p = players[(buttonSeat + k) % players.length];
       const card = deck.pop();
       p.cards.push(card);
-      await cards.deal(card, p.view.cards, { from: el.deck, faceUp: p.isHuman, dur: 300 });
+      await t3.dealCard(card, deckTop(), cardSlot(p, p.cards.length - 1), { faceUp: p.isHuman, dur: 300 });
       alive(s);
     }
   }
@@ -410,7 +591,7 @@ async function runHand(s) {
     for (let i = 0; i < count; i++) {
       const card = deck.pop();
       board.push(card);
-      await cards.deal(card, el.board, { from: el.deck, dur: 360 });
+      await t3.dealCard(card, deckTop(), boardSlot(board.length - 1), { dur: 360 });
       alive(s);
     }
     updateHint();
@@ -476,7 +657,7 @@ async function apply(p, action) {
     p.folded = true;
     bubble(p, 'Fold', 'fold');
     renderSeat(p);
-    cards.sweep([...p.view.cards.children], el.deck);
+    t3.sweep(p.cards, deckTop);
     sound.flip();
     if (p.isHuman) hideHint();
     else updateHint();
@@ -622,10 +803,15 @@ function presetRaise(size) {
 }
 
 // ---------- Showdown ----------
+// Turn a player's cards over and swing them round to face the camera.
 async function revealAll(s) {
   for (const p of live()) {
-    if (p.isHuman) continue;
-    for (const c of p.cards) await cards.flip(c.el, true);
+    if (p.isHuman || p.revealed) continue;
+    p.revealed = true;
+    await Promise.all(p.cards.map(async (c, i) => {
+      await t3.flip(c, true);
+      await t3.moveCard(c, cardSlot(p, i), 320);
+    }));
     alive(s);
   }
 }
@@ -660,9 +846,9 @@ async function showdown(s) {
     const amount = potTotal();
     bubble(w, `🏆 Takes ${fmt(amount)}`, 'win');
     w.view.seat.classList.add('winner');
-    chips.renderStack(el.potStack, 0, { pop: false });
+    pot.set(0);
+    potLabel.hide();
     await award(w, amount);
-    el.potLabel.textContent = 'Pot $0';
     if (w.isHuman) {
       fx.banner(`You win<small>+${fmt(amount)}</small>`, 'win');
       sound.win();
@@ -682,7 +868,7 @@ async function showdown(s) {
   alive(s);
 
   const allCards = [...board, ...remaining.flatMap((p) => p.cards)];
-  allCards.forEach((c) => c.el.classList.add('dim'));
+  allCards.forEach((c) => t3.dim(c, true));
   const pots = buildPots();
   let humanWon = 0;
   let headline = null;
@@ -692,7 +878,7 @@ async function showdown(s) {
     if (!headline) {
       headline = winners;
       for (const w of winners) {
-        bestFive([...w.cards, ...board]).forEach((c) => { c.el.classList.remove('dim'); c.el.classList.add('highlight'); });
+        bestFive([...w.cards, ...board]).forEach((c) => { t3.dim(c, false); t3.highlight(c, true); });
         w.view.seat.classList.add('winner');
         bubble(w, `🏆 ${describe(w.score)}`, 'win');
       }
@@ -708,8 +894,8 @@ async function showdown(s) {
     }
     updatePotAfterAward(pots, pot);
   }
-  chips.renderStack(el.potStack, 0, { pop: false });
-  el.potLabel.textContent = 'Pot $0';
+  pot.set(0);
+  potLabel.hide();
 
   const hand = describe(headline[0].score);
   if (humanWon > 0) {
@@ -725,7 +911,9 @@ async function showdown(s) {
 
 function updatePotAfterAward(pots, done) {
   const left = pots.slice(pots.indexOf(done) + 1).reduce((a, p) => a + p.amount, 0);
-  chips.renderStack(el.potStack, left, { pop: false });
+  pot.set(left, { pop: false });
+  if (left) potLabel.show(`Pot ${fmt(left)}`);
+  else potLabel.hide();
 }
 
 // ---------- Buy-in & seating ----------
@@ -754,24 +942,34 @@ function sitDown(amount) {
   saveHumanStack();
   renderSeat(human());
   el.buyin.hidden = true;
-  chips.fly($('#balance'), human().view.plate, amount, { max: 6 });
-  sound.chip();
+  t3.flyChips(balancePoint(), platePoint(human()), amount, { max: 6 });
   const s = session;
   setTimeout(() => { if (s === session) playHand(); }, 700);
 }
 
+const myLook = () => ({ name: profile.name, avatar: profile.avatar, color: profile.color, aggr: 0, loose: 0, bluff: 0 });
+
 function setupTable() {
+  // Clear anything left from a previous visit.
+  for (const c of [...board, ...players.flatMap((p) => p.cards)]) t3.removeCard(c);
+  const views = players.map((p) => p.view);
   usedBots = new Set();
-  players = [makePlayer(0, { name: 'You', avatar: '😎', aggr: 0, loose: 0, bluff: 0 }, 0, true)];
+  players = [makePlayer(0, myLook(), 0, true)];
   for (let i = 1; i <= 3; i++) players.push(makePlayer(i, pickBot(), BOT_STACK));
+  players.forEach((p, i) => { p.view = views[i]; });
   buttonSeat = Math.floor(Math.random() * players.length);
   board = [];
-  el.board.innerHTML = '';
   buildSeats();
+  players.forEach((p) => {
+    renderSeat(p);
+    p.view.seat.classList.remove('winner', 'turn', 'thinking');
+    p.view.bubble.textContent = '';
+    p.view.betStack.set(0);
+  });
   updatePot();
   setStatus('');
   setActionBar(null);
-  requestAnimationFrame(moveDealerButton);
+  applyLayout(true);
 }
 
 // ---------- Wiring ----------
@@ -786,11 +984,19 @@ el.buyinRefill.addEventListener('click', () => {
   wallet.refill();
   showBuyIn();
 });
-new ResizeObserver(() => { if (players.length) moveDealerButton(); }).observe(el.room);
+new ResizeObserver(() => { if (t3 && t3.active) applyLayout(); }).observe(el.stage);
+profile.onChange(() => {
+  const me = human();
+  if (!me || !me.view) return;
+  Object.assign(me, { name: profile.name, avatar: profile.avatar, color: profile.color });
+  renderSeat(me);
+});
 
 Casino.register('poker', {
   enter() {
     session++;
+    if (!t3) buildTables();
+    t3.setActive(true);
     setupTable();
     showBuyIn();
   },
@@ -807,6 +1013,7 @@ Casino.register('poker', {
     handRunning = false;
     el.buyin.hidden = true;
     showNext(false);
+    if (t3) t3.setActive(false);
     return true;
   },
   key(e) {

@@ -194,67 +194,7 @@ const centerOf = (el) => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 };
 
-// Run `mutate` (which changes layout) and slide `elems` smoothly from where they were to where they end up.
-function flipLayout(elems, mutate, dur = 340) {
-  const before = elems.map((e) => e.getBoundingClientRect());
-  mutate();
-  elems.forEach((e, i) => {
-    const a = e.getBoundingClientRect();
-    const dx = before[i].left - a.left;
-    const dy = before[i].top - a.top;
-    if (Math.abs(dx) + Math.abs(dy) > 0.5) {
-      e.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }], { duration: dur, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    }
-  });
-}
-
-// Fly a card from `from` (the shoe or deck) into `container`, then optionally flip it face up.
-async function dealCard(card, container, { from, faceUp = true, sideways = false, dur = 360 } = {}) {
-  const el = cardEl(card, false);
-  if (sideways) el.classList.add('sideways');
-  flipLayout([...container.children], () => container.appendChild(el));
-  const to = centerOf(el);
-  const src = centerOf(from);
-  sound.card();
-  await el.animate([
-    { translate: `${src.x - to.x}px ${src.y - to.y}px`, rotate: `${rand(-50, -20)}deg`, scale: 0.75 },
-    { translate: '0px 0px', rotate: '0deg', scale: 1 },
-  ], { duration: dur, easing: 'cubic-bezier(.15,.75,.3,1)' }).finished;
-  if (faceUp) await flipCard(el, true);
-  return el;
-}
-
-async function flipCard(el, faceUp = true) {
-  if (el.classList.contains('face-down') !== faceUp) return;
-  sound.flip();
-  el.classList.toggle('face-down', !faceUp);
-  await sleep(220);
-}
-
-// Slide cards off the table to `to` and remove them.
-function sweepCards(els, to, { stagger = 35 } = {}) {
-  const t = centerOf(to);
-  return Promise.all(els.map((el, i) => {
-    const c = centerOf(el);
-    return el.animate([
-      { translate: '0px 0px', rotate: '0deg', opacity: 1 },
-      { translate: `${t.x - c.x}px ${t.y - c.y}px`, rotate: `${rand(-40, 40)}deg`, opacity: 0, scale: 0.7 },
-    ], { duration: 480, delay: i * stagger, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' }).finished.then(() => el.remove());
-  }));
-}
-
 // ---------- Chips ----------
-const DENOMS = [1000, 500, 100, 25, 5, 1];
-
-function breakdown(amount) {
-  const out = [];
-  let left = Math.round(amount);
-  for (const d of DENOMS) {
-    while (left >= d && out.length < 60) { out.push(d); left -= d; }
-  }
-  return out;
-}
-
 function chipEl(value) {
   const el = document.createElement('div');
   el.className = `chip chip-${value}`;
@@ -262,54 +202,7 @@ function chipEl(value) {
   return el;
 }
 
-// Draw a stack of chips worth `amount` inside `el` (an element with class "stack").
-function renderStack(el, amount, { pop = true } = {}) {
-  let box = el.querySelector('.stack-chips');
-  if (!box) {
-    el.innerHTML = '<div class="stack-chips"></div><div class="stack-label"></div>';
-    box = el.querySelector('.stack-chips');
-  }
-  const list = breakdown(amount).slice(0, 12);
-  box.innerHTML = '';
-  list.forEach((v, i) => {
-    const c = chipEl(v);
-    c.style.bottom = `${i * 4}px`;
-    box.append(c);
-  });
-  box.style.height = `calc(var(--chip) + ${Math.max(0, list.length - 1) * 4}px)`;
-  el.querySelector('.stack-label').textContent = fmt(amount);
-  el.classList.toggle('empty', !amount);
-  if (pop && amount) {
-    el.classList.remove('pop');
-    void el.offsetWidth;
-    el.classList.add('pop');
-  }
-}
-
 const fxLayer = $('#fx');
-
-// Toss chips worth `amount` from one element to another along an arc.
-function flyChips(fromEl, toEl, amount, { max = 6, stagger = 55, dur = 520, size = 34 } = {}) {
-  if (!fromEl || !toEl || amount <= 0) return Promise.resolve();
-  const a = centerOf(fromEl);
-  const b = centerOf(toEl);
-  const list = breakdown(amount).slice(0, max);
-  return Promise.all(list.map((v, i) => {
-    const c = chipEl(v);
-    c.classList.add('flying');
-    c.style.setProperty('--chip', `${size}px`);
-    fxLayer.append(c);
-    const mx = (a.x + b.x) / 2 + rand(-24, 24);
-    const my = Math.min(a.y, b.y) - rand(40, 80);
-    const at = (x, y) => `translate(${x - size / 2}px, ${y - size / 2}px)`;
-    return c.animate([
-      { transform: at(a.x, a.y), opacity: 0 },
-      { transform: at(mx, my), opacity: 1, offset: 0.5 },
-      { transform: at(b.x + rand(-4, 4), b.y + rand(-4, 4)), opacity: 1 },
-    ], { duration: dur, delay: i * stagger, easing: 'cubic-bezier(.3,.6,.4,1)', fill: 'both' })
-      .finished.then(() => { sound.chip(); c.remove(); });
-  }));
-}
 
 // ---------- Effects ----------
 const bannerEl = $('#banner');
@@ -510,8 +403,8 @@ function start() {
 
 return {
   $, $$, sleep, rand, fmt, store, wallet, sound, ABORT, register, go, start,
-  cards: { makeDeck, shuffle, cardEl, deal: dealCard, flip: flipCard, sweep: sweepCards, rankLabel, SUITS },
-  chips: { chipEl, renderStack, fly: flyChips, breakdown },
-  fx: { banner, floatText, confetti, flipLayout, centerOf },
+  cards: { makeDeck, shuffle, cardEl, rankLabel, SUITS, PIPS },
+  chips: { chipEl },
+  fx: { banner, floatText, confetti },
 };
 })();

@@ -1,7 +1,8 @@
 (() => {
 'use strict';
 
-const { $, sleep, fmt, store, wallet, sound, ABORT, cards, chips, fx } = Casino;
+const { $, sleep, fmt, store, wallet, sound, ABORT, cards, chips, fx, Table3D } = Casino;
+const { V, arcText, speckle } = Table3D;
 
 const DECKS = 6;
 const RESHUFFLE_AT = 52 * DECKS * 0.25;
@@ -9,16 +10,20 @@ const MIN_BET = 5;
 const MAX_BET = 5000;
 const MAX_HANDS = 4;
 const TRAY = [5, 25, 100, 500, 1000];
+const HAND_GAP = 2.95;
+// Phones in portrait look down more steeply so the table fills the tall screen.
+const VIEW = { fov: 40, elevation: (aspect) => (aspect < 0.9 ? 70 : 56), depth: 9.6 };
 
 const el = {
-  shoe: $('#bj-shoe'), meter: $('#bj-shoe-meter'), discard: $('#bj-discard'), bank: $('#bj-bank'),
-  dealerHand: $('#bj-dealer-hand'), dealerTotal: $('#bj-dealer-total'), hands: $('#bj-hands'),
+  stage: $('#bj-stage'), controls: $('#blackjack .bj-controls'),
   status: $('#bj-status'), betRow: $('#bj-bet-row'), playRow: $('#bj-play-row'), tray: $('#bj-tray'),
   clear: $('#bj-clear'), doubleBet: $('#bj-double-bet'), deal: $('#bj-deal'),
   hit: $('#bj-hit'), stand: $('#bj-stand'), double: $('#bj-double'), split: $('#bj-split'),
   broke: $('#bj-broke'), balance: $('#balance'),
 };
 
+let t3 = null;
+let world = null; // shoe, discard pile, chip rack, dealer total label
 let shoe = [];
 let phase = 'idle'; // idle | betting | dealing | player | dealer | settle
 let busy = false;
@@ -50,52 +55,150 @@ const canDouble = (h) => h.cards.length === 2 && !h.done && !splitAces(h) && wal
 const canSplit = (h) => h.cards.length === 2 && !splitAces(h) && hands.length < MAX_HANDS
   && cardValue(h.cards[0]) === cardValue(h.cards[1]) && wallet.balance >= h.bet;
 
-function makeHand(amount = 0) {
-  const wrap = document.createElement('div');
-  wrap.className = 'bj-hand';
-  wrap.innerHTML = `
-    <div class="result-tag"></div>
-    <div class="hand-wrap"><div class="hand fan"></div><div class="total-badge" hidden></div></div>
-    <div class="bet-spot"><div class="stack empty"></div></div>`;
-  return {
-    cards: [], bet: amount, done: false, busted: false, fromSplit: false, blackjack: false,
-    wrap,
-    cardsEl: wrap.querySelector('.hand'),
-    totalEl: wrap.querySelector('.total-badge'),
-    spotEl: wrap.querySelector('.bet-spot'),
-    stackEl: wrap.querySelector('.stack'),
-    tagEl: wrap.querySelector('.result-tag'),
-  };
+// ---------- Table layout ----------
+// The dealer stands at the straight edge (far, -z); the player sits at the curved edge (+z).
+// Hands fan out along the curve and turn slightly toward the dealer.
+function handFrame(i, n) {
+  const x = (i - (n - 1) / 2) * HAND_GAP;
+  return { x, z: 2.55 - 0.045 * x * x, yaw: x * 0.07 };
+}
+function local(f, lx, lz) {
+  const c = Math.cos(f.yaw);
+  const s = Math.sin(f.yaw);
+  return V(f.x + lx * c + lz * s, 0, f.z - lx * s + lz * c);
+}
+const frameOf = (h) => handFrame(hands.indexOf(h), hands.length);
+function cardSlot(h, i) {
+  const f = frameOf(h);
+  const side = h.sideways === i;
+  const p = local(f, -0.3 + i * 0.42 + (side ? 0.22 : 0), -i * 0.2);
+  return { x: p.x, y: 0.012 + i * 0.006, z: p.z, yaw: f.yaw + (side ? Math.PI / 2 : 0) };
+}
+const spotPos = (h) => local(frameOf(h), 0, 1.4);
+const dealerSlot = (i, n) => ({ x: (i - (n - 1) / 2) * 0.82, y: 0.012 + i * 0.004, z: -1.95, yaw: 0 });
+
+function setView(dur = 900) {
+  const n = hands.length;
+  const span = (n - 1) * HAND_GAP + 3.6;
+  const x = phase === 'player' && n > 1 ? handFrame(active, n).x * 0.3 : 0;
+  const z = phase === 'dealer' || phase === 'settle' ? 0.3 : 0.6;
+  return t3.setView({ ...VIEW, target: V(x, 0, z), width: (aspect) => Math.max(aspect < 0.9 ? 7.4 : 14, span + (aspect < 0.9 ? 0.6 : 0)) }, dur);
 }
 
-function setBadge(badge, list) {
-  if (!list.length) { badge.hidden = true; return; }
+function buildTable() {
+  t3 = Table3D.create(el.stage, { bottomInset: () => el.controls.offsetHeight });
+  const cz = -3.3;
+  const rx = 9.4;
+  const rz = 8.6;
+  const outline = [];
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI;
+    outline.push([rx * Math.cos(a), cz + rz * Math.sin(a)]);
+  }
+  outline.push([-rx, cz - 0.45], [-rx + 0.18, cz - 0.82], [-rx + 0.55, cz - 0.98], [rx - 0.55, cz - 0.98], [rx - 0.18, cz - 0.82], [rx, cz - 0.45]);
+
+  t3.addTable({
+    outline,
+    drawFelt(g, map, s, cw, ch) {
+      const [gx, gy] = map(0, -0.3);
+      const grd = g.createRadialGradient(gx, gy, 0, gx, gy, cw * 0.62);
+      grd.addColorStop(0, '#20995c');
+      grd.addColorStop(0.55, '#127245');
+      grd.addColorStop(1, '#063a22');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, cw, ch);
+      speckle(g, cw, ch, 60000, 0.05);
+      const [cx, cy] = map(0, cz);
+      g.fillStyle = 'rgba(236,196,98,.95)';
+      g.font = `700 ${0.46 * s}px Cinzel, Georgia, serif`;
+      arcText(g, 'BLACKJACK PAYS 3 TO 2', cx, cy, 3.9 * s, 0.09 * s);
+      g.strokeStyle = 'rgba(236,196,98,.7)';
+      g.lineWidth = 0.035 * s;
+      for (const r of [4.4, 5.15]) {
+        g.beginPath();
+        g.arc(cx, cy, r * s, Math.PI / 2 - 0.6, Math.PI / 2 + 0.6);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(255,255,255,.8)';
+      g.font = `600 ${0.24 * s}px Rubik, Arial, sans-serif`;
+      arcText(g, 'DEALER MUST STAND ON ALL 17s', cx, cy, 4.86 * s, 0.07 * s);
+    },
+  });
+  world = {
+    shoe: t3.addShoe(V(6.4, 0, -2.6), -0.55),
+    discard: t3.addDiscard(V(-6.4, 0, -2.6), 0.55),
+    rack: t3.addRack(V(0, 0, -3.72), [1000, 500, 100, 100, 25, 25, 5, 5, 1]),
+    dealerTotal: t3.label('t3-total', () => V(-((dealer.length - 1) / 2) * 0.82 - 0.75, 0, -1.95)),
+  };
+  world.dealerTotal.hide();
+  // Start high above the table; the first round's view swoops down to the seat.
+  t3.setView({ ...VIEW, target: V(0, 0, 0), elevation: 80, width: (aspect) => (aspect < 0.9 ? 16 : 26) }, 0);
+}
+
+const balancePoint = () => t3.screenPoint(el.balance, 5);
+
+// ---------- Hands ----------
+function makeHand(amount = 0) {
+  const h = { cards: [], bet: amount, done: false, busted: false, fromSplit: false, blackjack: false, sideways: -1 };
+  h.ring = t3.betRing();
+  h.stack = t3.stack(V());
+  h.total = t3.label('t3-total', () => local(frameOf(h), -1.05, 0));
+  h.total.hide();
+  h.tag = t3.label('t3-tag', () => local(frameOf(h), -0.3 + 0.21 * Math.max(0, h.cards.length - 1), -1.05 - 0.2 * Math.max(0, h.cards.length - 1)));
+  h.tag.hide();
+  return h;
+}
+
+function placeHand(h) {
+  h.ring.setPos(spotPos(h));
+  h.stack.moveTo(spotPos(h), 0);
+}
+
+function disposeHand(h) {
+  for (const c of h.cards) t3.removeCard(c);
+  h.ring.remove();
+  h.stack.remove();
+  h.total.remove();
+  h.tag.remove();
+}
+
+function layoutHands(dur = 400) {
+  return Promise.all(hands.flatMap((h) => [
+    h.ring.setPos(spotPos(h), dur),
+    h.stack.moveTo(spotPos(h), dur),
+    ...h.cards.map((c, i) => (c.obj ? t3.moveCard(c, cardSlot(h, i), dur) : null)),
+  ]));
+}
+
+function setBadge(label, list) {
+  if (!list.length) { label.hide(); return; }
   const { total, soft } = handValue(list);
   const text = soft && total < 21 ? `${total - 10} / ${total}` : String(total);
-  badge.hidden = false;
-  if (badge.textContent !== text) {
-    badge.textContent = text;
-    badge.classList.remove('pop');
-    void badge.offsetWidth;
-    badge.classList.add('pop');
+  const b = label.el;
+  if (b.textContent !== text) {
+    b.classList.remove('pop');
+    void b.offsetWidth;
+    b.classList.add('pop');
   }
-  badge.classList.toggle('bust', total > 21);
-  badge.classList.toggle('twentyone', total === 21);
+  label.show(text);
+  b.classList.toggle('bust', total > 21);
+  b.classList.toggle('twentyone', total === 21);
 }
 
-const visibleDealerCards = () => dealer.filter((c) => !c.el.classList.contains('face-down'));
+const visibleDealerCards = () => dealer.filter((c) => c.obj && c.obj.faceUp);
 
 function setTag(h, text, kind) {
-  h.tagEl.className = `result-tag ${kind}`;
-  h.tagEl.textContent = text;
-}
-
-function updateMeter() {
-  el.meter.style.width = `${(shoe.length / (52 * DECKS)) * 100}%`;
+  h.tag.el.className = `t3-tag ${kind}`;
+  h.tag.show(text);
 }
 
 function focusHands() {
-  hands.forEach((h, i) => h.wrap.classList.toggle('active', phase === 'player' && i === active));
+  hands.forEach((h, i) => {
+    const current = phase === 'player' && i === active;
+    h.ring.setGlow(current || (phase === 'betting' && bet === 0));
+    h.total.el.classList.toggle('active', current && hands.length > 1);
+    h.total.el.classList.toggle('current', current);
+  });
 }
 
 function updateUI() {
@@ -138,11 +241,11 @@ function addBet(amount, fromEl) {
   const h = hands[0];
   const s = session;
   if (fromEl) {
-    chips.fly(fromEl, h.spotEl, amount, { max: 3, dur: 420 }).then(() => {
-      if (s === session && phase === 'betting') chips.renderStack(h.stackEl, bet);
+    t3.flyChips(t3.screenPoint(fromEl, 4.5), h.stack.top(), amount, { max: 3, dur: 440 }).then(() => {
+      if (s === session && phase === 'betting') h.stack.set(bet);
     });
   } else {
-    chips.renderStack(h.stackEl, bet);
+    h.stack.set(bet);
   }
   updateUI();
 }
@@ -150,26 +253,33 @@ function addBet(amount, fromEl) {
 function clearBet() {
   if (phase !== 'betting' || !bet) return;
   const amount = bet;
+  const h = hands[0];
   bet = 0;
   wallet.hold('blackjack', 0);
-  chips.renderStack(hands[0].stackEl, 0);
-  chips.fly(hands[0].spotEl, el.balance, amount, { max: 4 });
+  const from = h.stack.top();
+  h.stack.set(0);
+  t3.flyChips(from, balancePoint(), amount, { max: 4 });
   wallet.add(amount);
   updateUI();
 }
 
+function clearTable() {
+  for (const c of dealer) t3.removeCard(c);
+  hands.forEach(disposeHand);
+  dealer = [];
+  hands = [];
+  world.dealerTotal.hide();
+}
+
 function newRound() {
+  clearTable();
   phase = 'betting';
   busy = false;
-  dealer = [];
-  el.dealerHand.innerHTML = '';
-  el.dealerTotal.hidden = true;
   hands = [makeHand()];
+  placeHand(hands[0]);
   active = 0;
-  el.hands.innerHTML = '';
-  el.hands.classList.remove('split');
-  el.hands.append(hands[0].wrap);
   bet = 0;
+  setView();
   if (lastBet >= MIN_BET && wallet.balance >= lastBet) addBet(lastBet);
   updateUI();
 }
@@ -177,40 +287,41 @@ function newRound() {
 // ---------- Dealing ----------
 async function reshuffle(s) {
   fx.banner('Shuffling…', 'small', 1300);
-  el.shoe.classList.add('shuffling');
   sound.shuffle();
-  await sleep(1100);
+  world.discard.reset();
+  await world.shoe.shake();
   alive(s);
-  el.shoe.classList.remove('shuffling');
   shoe = cards.makeDeck(DECKS);
-  updateMeter();
 }
 
 async function draw(h, s, sideways = false) {
   const card = shoe.pop();
   h.cards.push(card);
-  updateMeter();
-  await cards.deal(card, h.cardsEl, { from: el.shoe, sideways });
+  if (sideways) h.sideways = h.cards.length - 1;
+  await t3.dealCard(card, world.shoe.mouth, cardSlot(h, h.cards.length - 1));
   alive(s);
-  setBadge(h.totalEl, h.cards);
+  setBadge(h.total, h.cards);
 }
 
 async function drawDealer(faceUp, s) {
   const card = shoe.pop();
   dealer.push(card);
-  updateMeter();
-  await cards.deal(card, el.dealerHand, { from: el.shoe, faceUp });
+  const n = dealer.length;
+  await Promise.all([
+    ...dealer.slice(0, -1).map((c, i) => t3.moveCard(c, dealerSlot(i, n), 300)),
+    t3.dealCard(card, world.shoe.mouth, dealerSlot(n - 1, n), { faceUp }),
+  ]);
   alive(s);
-  setBadge(el.dealerTotal, visibleDealerCards());
+  setBadge(world.dealerTotal, visibleDealerCards());
 }
 
 async function revealHole(s) {
   const hole = dealer[1];
-  if (hole && hole.el.classList.contains('face-down')) {
-    await cards.flip(hole.el, true);
+  if (hole && !hole.obj.faceUp) {
+    await t3.flip(hole, true);
     alive(s);
   }
-  setBadge(el.dealerTotal, dealer);
+  setBadge(world.dealerTotal, dealer);
 }
 
 async function deal() {
@@ -224,6 +335,7 @@ async function deal() {
   h.bet = bet;
   bet = 0;
   updateUI();
+  setView();
   try {
     if (shoe.length < RESHUFFLE_AT) await reshuffle(s);
     await draw(h, s);
@@ -234,11 +346,8 @@ async function deal() {
     const up = dealer[0];
     if (up.r === 14 || isTen(up)) {
       el.status.textContent = 'Dealer checks for blackjack…';
-      const hole = dealer[1].el;
-      hole.classList.add('peek');
-      await sleep(750);
+      await t3.peek(dealer[1]);
       alive(s);
-      hole.classList.remove('peek');
       if (isBlackjack(dealer)) {
         h.blackjack = isBlackjack(h.cards);
         h.done = true;
@@ -281,8 +390,9 @@ async function bust(h, s) {
   h.done = true;
   setTag(h, 'BUST', 'lose');
   sound.lose();
-  chips.renderStack(h.stackEl, 0);
-  await chips.fly(h.spotEl, el.bank, h.bet, { max: 4 });
+  const from = h.stack.top();
+  h.stack.set(0);
+  await t3.flyChips(from, world.rack.top, h.bet, { max: 4 });
   alive(s);
 }
 
@@ -295,6 +405,7 @@ async function advance(s) {
   }
   active = next;
   updateUI();
+  setView(600);
   const h = hands[active];
   if (h.cards.length === 1) {
     await draw(h, s);
@@ -325,10 +436,10 @@ const stand = () => act(async (s, h) => {
 const doubleDown = () => act(async (s, h) => {
   if (!canDouble(h)) return;
   wallet.add(-h.bet);
-  await chips.fly(el.balance, h.spotEl, h.bet, { max: 4 });
+  await t3.flyChips(balancePoint(), h.stack.top(), h.bet, { max: 4 });
   alive(s);
   h.bet *= 2;
-  chips.renderStack(h.stackEl, h.bet);
+  h.stack.set(h.bet);
   await draw(h, s, true);
   h.done = true;
   if (handValue(h.cards).total > 21) await bust(h, s);
@@ -338,23 +449,23 @@ const doubleDown = () => act(async (s, h) => {
 const split = () => act(async (s, h) => {
   if (!canSplit(h)) return;
   wallet.add(-h.bet);
+  const from = spotPos(h);
   const nh = makeHand(h.bet);
   nh.fromSplit = true;
   h.fromSplit = true;
   hands.splice(active + 1, 0, nh);
-  const moving = h.cards.pop();
-  nh.cards.push(moving);
-  el.hands.classList.add('split');
-  fx.flipLayout([...el.hands.children, moving.el], () => {
-    h.wrap.after(nh.wrap);
-    nh.cardsEl.append(moving.el);
-  }, 420);
-  setBadge(h.totalEl, h.cards);
-  setBadge(nh.totalEl, nh.cards);
-  updateUI();
-  await chips.fly(el.balance, nh.spotEl, nh.bet, { max: 4 });
+  nh.ring.setPos(from);
+  nh.stack.moveTo(from, 0);
+  nh.cards.push(h.cards.pop());
+  setView(600);
+  await layoutHands(420);
   alive(s);
-  chips.renderStack(nh.stackEl, nh.bet);
+  setBadge(h.total, h.cards);
+  setBadge(nh.total, nh.cards);
+  updateUI();
+  await t3.flyChips(balancePoint(), nh.stack.top(), nh.bet, { max: 4 });
+  alive(s);
+  nh.stack.set(nh.bet);
   await draw(h, s);
   if (splitAces(h) || handValue(h.cards).total === 21) {
     h.done = true;
@@ -366,6 +477,7 @@ const split = () => act(async (s, h) => {
 async function dealerTurn(s) {
   phase = 'dealer';
   updateUI();
+  setView();
   await sleep(300);
   await revealHole(s);
   const needDraw = !isBlackjack(dealer) && hands.some((h) => !h.busted && !h.blackjack);
@@ -404,12 +516,13 @@ async function settle(s) {
     const profit = r.pay - r.h.bet;
     setTag(r.h, profit > 0 ? `${r.label} +${fmt(profit)}` : r.label, r.kind);
     if (profit > 0) {
-      await chips.fly(el.bank, r.h.spotEl, profit, { max: 5 });
+      await t3.flyChips(world.rack.top, r.h.stack.top(), profit, { max: 5 });
       alive(s);
-      chips.renderStack(r.h.stackEl, r.pay);
+      r.h.stack.set(r.pay);
     } else if (r.kind === 'lose') {
-      chips.renderStack(r.h.stackEl, 0);
-      await chips.fly(r.h.spotEl, el.bank, r.h.bet, { max: 4 });
+      const from = r.h.stack.top();
+      r.h.stack.set(0);
+      await t3.flyChips(from, world.rack.top, r.h.bet, { max: 4 });
       alive(s);
     }
     await sleep(160);
@@ -435,8 +548,10 @@ async function settle(s) {
   await sleep(800);
   alive(s);
   const paid = results.filter((r) => r.pay > 0);
-  paid.forEach((r) => chips.renderStack(r.h.stackEl, 0));
-  await Promise.all(paid.map((r) => chips.fly(r.h.spotEl, el.balance, r.pay, { max: 5 })));
+  const tops = paid.map((r) => r.h.stack.top());
+  paid.forEach((r) => r.h.stack.set(0));
+  const to = balancePoint();
+  await Promise.all(paid.map((r, i) => t3.flyChips(tops[i], to, r.pay, { max: 5 })));
   alive(s);
   wallet.add(returned);
   pendingPayout = 0;
@@ -444,10 +559,10 @@ async function settle(s) {
   await sleep(900);
   alive(s);
 
-  const els = [...el.dealerHand.children, ...hands.flatMap((h) => [...h.cardsEl.children])];
-  el.dealerTotal.hidden = true;
-  hands.forEach((h) => { h.totalEl.hidden = true; h.tagEl.textContent = ''; });
-  await cards.sweep(els, el.discard);
+  world.dealerTotal.hide();
+  hands.forEach((h) => { h.total.hide(); h.tag.hide(); });
+  const all = [...dealer, ...hands.flatMap((h) => h.cards)];
+  await t3.sweep(all, () => world.discard.top(), () => world.discard.add(1));
   alive(s);
   newRound();
 }
@@ -477,8 +592,9 @@ $('#bj-refill').addEventListener('click', () => {
 Casino.register('blackjack', {
   enter() {
     session++;
+    if (!t3) buildTable();
+    t3.setActive(true);
     if (!shoe.length) shoe = cards.makeDeck(DECKS);
-    updateMeter();
     newRound();
   },
   leave(force) {
@@ -490,6 +606,7 @@ Casino.register('blackjack', {
     pendingPayout = 0;
     wallet.hold('blackjack', 0);
     phase = 'idle';
+    if (t3) t3.setActive(false);
     return true;
   },
   key(e) {

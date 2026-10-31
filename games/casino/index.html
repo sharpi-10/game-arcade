@@ -8,12 +8,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="casino.css">
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 </head>
 <body>
 <header class="topbar">
   <a class="back" id="back" href="../../index.html">← Arcade</a>
   <div class="brand"><span>♠</span> GOLDEN ACE <span class="red">♥</span></div>
   <div class="topbar-right">
+    <button class="profile-btn" id="profile-btn" aria-label="Customize your character" title="Customize your character">
+      <span class="pf-avatar"></span><span class="pf-name"></span>
+    </button>
     <div class="balance" id="balance" title="Your chips"><span class="coin"></span><span id="balance-amount">$0</span></div>
     <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
   </div>
@@ -25,6 +29,12 @@
   <div class="lobby-inner">
     <h1 class="lobby-title">Golden Ace Casino</h1>
     <p class="lobby-sub">Pick a table. Your chips carry over between games.</p>
+    <button class="player-card" id="player-card" aria-label="Customize your character">
+      <span class="pc-avatar"></span>
+      <span class="pc-text"><small>Playing as</small><b class="pc-name"></b></span>
+      <canvas class="pc-back" data-w="30" aria-hidden="true"></canvas>
+      <span class="pc-edit">✎ Customize</span>
+    </button>
     <div class="lobby-games">
       <a class="game-card" href="#blackjack">
         <div class="gc-art" id="art-blackjack"></div>
@@ -52,31 +62,7 @@
 
 <!-- ---------- Blackjack ---------- -->
 <section class="screen table-screen" id="blackjack" hidden>
-  <div class="bj-table felt-bg" id="bj-table">
-    <div class="bj-rack" id="bj-bank" aria-hidden="true">
-      <i style="--c:#f2b01e"></i><i style="--c:#6a1b9a"></i><i style="--c:#1f1f22"></i><i style="--c:#2e7d32"></i><i style="--c:#2e7d32"></i><i style="--c:#d32f2f"></i><i style="--c:#d32f2f"></i>
-    </div>
-    <div class="shoe" id="bj-shoe" aria-hidden="true"><div class="shoe-meter"><i id="bj-shoe-meter"></i></div></div>
-    <div class="discard" id="bj-discard" aria-hidden="true"></div>
-    <div class="bj-dealer">
-      <div class="hand-wrap">
-        <div class="hand fan" id="bj-dealer-hand"></div>
-        <div class="total-badge" id="bj-dealer-total" hidden></div>
-      </div>
-    </div>
-    <!-- Concentric arcs (shared centre 400,-560) so the text and lines stay parallel. -->
-    <svg class="felt-print" viewBox="0 -30 800 200" aria-hidden="true">
-      <defs>
-        <path id="arc-big" d="M 56.6 -10.5 A 648 648 0 0 0 743.4 -10.5"/>
-        <path id="arc-small" d="M 29.1 33.6 A 700 700 0 0 0 770.9 33.6"/>
-      </defs>
-      <path class="arc-line" d="M 46 6.5 A 668 668 0 0 0 754 6.5"/>
-      <path class="arc-line" d="M 18.5 50.6 A 720 720 0 0 0 781.5 50.6"/>
-      <text class="arc-big"><textPath href="#arc-big" startOffset="50%" text-anchor="middle">BLACKJACK PAYS 3 TO 2</textPath></text>
-      <text class="arc-small"><textPath href="#arc-small" startOffset="50%" text-anchor="middle">DEALER MUST STAND ON ALL 17s</textPath></text>
-    </svg>
-    <div class="bj-hands" id="bj-hands"></div>
-  </div>
+  <div class="stage" id="bj-stage"></div>
 
   <div class="bj-controls">
     <div class="bj-status" id="bj-status"></div>
@@ -105,17 +91,7 @@
 
 <!-- ---------- Texas Hold'em ---------- -->
 <section class="screen table-screen" id="poker" hidden>
-  <div class="pk-room" id="pk-room">
-    <div class="pk-table">
-      <div class="pk-felt felt-bg">
-        <div class="pk-deck" id="pk-deck" aria-hidden="true"></div>
-        <div class="pk-pot" id="pk-pot"><div class="stack empty"></div><div class="pot-label" id="pk-pot-label">Pot $0</div></div>
-        <div class="hand pk-board" id="pk-board"></div>
-        <div class="pk-status" id="pk-status"></div>
-      </div>
-    </div>
-    <div class="dealer-btn" id="pk-dealer" aria-label="Dealer button">D</div>
-  </div>
+  <div class="stage" id="pk-stage"></div>
 
   <div class="pk-actions waiting" id="pk-actions">
     <div class="pk-dock">
@@ -161,11 +137,55 @@
   </div>
 </div>
 
+<div class="modal profile-modal" id="profile-modal" hidden>
+  <div class="modal-panel profile-panel" role="dialog" aria-modal="true" aria-labelledby="profile-title" tabindex="-1">
+    <header class="pf-head">
+      <h2 id="profile-title">Your Character</h2>
+      <button class="icon-btn" id="profile-close" aria-label="Close">✕</button>
+    </header>
+    <div class="pf-body">
+      <div class="pf-preview">
+        <div class="pf-big-avatar" id="pf-big-avatar"></div>
+        <div class="plate" id="pf-plate">
+          <div class="avatar"></div>
+          <div class="seat-info">
+            <div class="seat-name"><span class="nm"></span></div>
+            <div class="seat-stack">$1,000</div>
+          </div>
+        </div>
+        <div class="pf-cards" id="pf-cards"><canvas data-w="64"></canvas><canvas data-w="64"></canvas></div>
+        <button class="btn ghost pf-random" id="pf-random">🎲 Surprise me</button>
+      </div>
+      <div class="pf-options">
+        <label class="pf-section">
+          <span class="pf-label">Name</span>
+          <input class="pf-input" id="pf-name" type="text" placeholder="You" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="pf-section">
+          <span class="pf-label">Avatar</span>
+          <div class="pf-avatars" id="pf-avatars"></div>
+        </div>
+        <div class="pf-section">
+          <span class="pf-label">Color</span>
+          <div class="pf-colors" id="pf-colors"></div>
+        </div>
+        <div class="pf-section">
+          <span class="pf-label">Card back</span>
+          <div class="pf-backs" id="pf-backs"></div>
+        </div>
+      </div>
+    </div>
+    <footer class="pf-foot"><button class="btn gold" id="profile-done">Done</button></footer>
+  </div>
+</div>
+
 <div id="fx" aria-hidden="true"></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
 <div class="banner" id="banner" role="status"></div>
 
 <script src="common.js"></script>
+<script src="profile.js"></script>
+<script src="table3d.js"></script>
 <script src="blackjack.js"></script>
 <script src="poker.js"></script>
 <script>Casino.start();</script>
