@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07110c;
+    --felt: #0f6b3e;
+    --felt-hi: #1b8d55;
+    --felt-lo: #073821;
+    --gold: #f5c84c;
+    --gold-hi: #ffe9a8;
+    --gold-lo: #a8720f;
+    --red: #e0414b;
+    --text: #f6f1e3;
+    --muted: #b8c3b6;
+    --line: rgba(255, 255, 255, .12);
+    --bar: rgba(5, 10, 8, .95);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text);
+    font-family: Rubik, system-ui, sans-serif;
+    background:
+      radial-gradient(900px 500px at 50% -10%, rgba(245, 200, 76, .18), transparent 60%),
+      radial-gradient(900px 600px at 50% 115%, rgba(15, 107, 62, .55), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; height: 56px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+    background: linear-gradient(180deg, var(--bar), rgba(5, 10, 8, .8));
+    border-bottom: 1px solid rgba(245, 200, 76, .25);
+    backdrop-filter: blur(6px);
+  }
+  .brand {
+    grid-column: 2;
+    font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 20px; letter-spacing: .08em;
+    color: var(--gold); white-space: nowrap;
+  }
+  .brand .red { color: var(--red); }
+  .chips {
+    grid-column: 3; justify-self: end;
+    display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 6px;
+    border-radius: 999px; background: rgba(0, 0, 0, .45); border: 1px solid rgba(245, 200, 76, .45);
+    color: var(--text); text-decoration: none; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .chips:hover { border-color: var(--gold); }
+  .coin {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 45%, var(--gold-lo));
+    box-shadow: inset 0 0 0 2px rgba(120, 70, 0, .45);
+  }
+
+  /* Paints the phone's status-bar strip above the sticky top bar. */
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); }
+
+  /* ---------- Floating suits ---------- */
+  .suits { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .suits span {
+    position: absolute; bottom: -80px; color: #fff; opacity: .06;
+    animation: drift linear infinite;
+  }
+  .suits span.red { color: #ff6b74; opacity: .09; }
+  @keyframes drift {
+    from { transform: translateY(0) rotate(0); }
+    to { transform: translateY(-115vh) rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .suits { display: none; } }
+
+  /* ---------- Layout ---------- */
+  header, main, footer { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+  header { padding-top: 56px; padding-bottom: 8px; text-align: center; }
+  h1 {
+    font-family: Cinzel, Georgia, serif; font-weight: 900; margin: 0;
+    font-size: clamp(40px, 8vw, 72px); letter-spacing: .04em; line-height: 1.05;
+    background: linear-gradient(100deg, var(--gold-lo) 0%, var(--gold) 25%, var(--gold-hi) 40%, var(--gold) 55%, var(--gold-lo) 80%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 6s linear infinite;
+    filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .5));
+  }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+  .tagline { color: var(--muted); font-size: 17px; margin: 12px 0 0; }
+
+  /* Gold rule with the section name in the middle. */
+  .section-title {
+    display: flex; align-items: center; gap: 16px;
+    margin: 44px 0 20px;
+    font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 15px; letter-spacing: .24em;
+    color: var(--gold); text-transform: uppercase; white-space: nowrap;
+  }
+  .section-title::before, .section-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(245, 200, 76, .55));
+  }
+  .section-title::after { background: linear-gradient(90deg, rgba(245, 200, 76, .55), transparent); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 24px; }
+
+  /* ---------- Game cards ---------- */
+  .card {
+    display: flex; flex-direction: column; overflow: hidden;
+    border-radius: 24px; color: inherit; text-decoration: none;
+    background: linear-gradient(180deg, #13201a, #0c1611);
+    border: 1px solid rgba(245, 200, 76, .3);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
+    transition: transform .25s cubic-bezier(.2, .8, .2, 1.2), box-shadow .25s, border-color .25s;
+  }
+  .card:hover, .card:focus-visible {
+    transform: translateY(-6px); outline: none; border-color: var(--gold);
+    box-shadow: 0 26px 60px rgba(0, 0, 0, .55), 0 0 0 1px var(--gold), 0 0 40px rgba(245, 200, 76, .25);
+  }
+  .thumb { aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid rgba(245, 200, 76, .25); }
+  .thumb svg { width: 100%; height: 100%; display: block; transition: transform .4s cubic-bezier(.2, .8, .2, 1); }
+  .card:hover .thumb svg { transform: scale(1.04); }
+  .card-body { display: flex; flex-direction: column; flex: 1; padding: 18px 22px 22px; }
+  .tag {
+    align-self: flex-start; height: 24px; display: inline-flex; align-items: center;
+    padding: 0 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--gold-hi); border: 1px solid rgba(245, 200, 76, .45); background: rgba(245, 200, 76, .08);
+  }
+  .card h2 {
+    font-family: Cinzel, Georgia, serif; font-weight: 900; font-size: 22px; margin: 12px 0 6px; color: var(--gold);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card p { color: var(--muted); margin: 0 0 18px; line-height: 1.5; flex: 1; }
+  .meta {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding-top: 16px; border-top: 1px solid var(--line);
+  }
+  .best { font-size: 14px; color: var(--muted); }
+  .best strong { color: var(--text); font-variant-numeric: tabular-nums; }
+  .play {
+    height: 36px; display: inline-flex; align-items: center; padding: 0 20px; border-radius: 999px;
+    font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
+    color: #3a2300; background: linear-gradient(180deg, var(--gold-hi), var(--gold) 45%, #e0a526);
+    box-shadow: 0 3px 0 var(--gold-lo);
+  }
+
+  /* ---------- Coming soon ---------- */
+  .soon-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .soon {
+    display: flex; align-items: center; gap: 14px; height: 84px; padding: 0 18px;
+    border-radius: 18px; border: 1px dashed rgba(245, 200, 76, .4);
+    background: rgba(255, 255, 255, .02);
+  }
+  .soon .emoji {
+    width: 48px; height: 48px; flex: none; border-radius: 50%;
+    display: grid; place-items: center; font-size: 24px;
+    background: radial-gradient(circle at 50% 35%, var(--felt-hi), var(--felt) 55%, var(--felt-lo));
+    box-shadow: inset 0 0 0 2px rgba(245, 200, 76, .5);
+  }
+  .soon > span:last-child { min-width: 0; }
+  .soon b { display: block; font-family: Cinzel, Georgia, serif; font-weight: 700; font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .soon small { display: block; margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+
+  footer { color: var(--muted); font-size: 13px; text-align: center; padding-top: 48px; padding-bottom: 32px; }
+
+  @media (max-width: 520px) {
+    .brand { grid-column: 1 / 3; justify-self: start; font-size: 17px; }
+    header { padding-top: 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="suits" id="suits" aria-hidden="true"></div>
+
+<div class="topbar">
+  <div class="brand"><span>♠</span> GAME ARCADE <span class="red">♥</span></div>
+  <a class="chips" href="games/casino/index.html" title="Casino chips"><span class="coin"></span><span id="chips">$1,000</span></a>
+</div>
+
+<header>
+  <h1>Game Arcade</h1>
+  <p class="tagline">Pick a game and press play.</p>
+</header>
+
+<main>
+  <div class="section-title">Games</div>
+  <div class="grid" id="games"></div>
+
+  <div class="section-title">Coming soon</div>
+  <div class="grid soon-grid" id="coming"></div>
+</main>
+
+<footer>Scores and chips are saved in this browser.</footer>
+
+<template id="kart-art">
+  <svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3d8ce0"/>
+        <stop offset="1" stop-color="#cde8ff"/>
+      </linearGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#sky)"/>
+    <ellipse cx="70" cy="40" rx="30" ry="10" fill="#fff" opacity=".9"/>
+    <ellipse cx="250" cy="30" rx="36" ry="11" fill="#fff" opacity=".85"/>
+    <path d="M0 112 L50 80 L95 104 L150 70 L205 102 L255 78 L320 108 L320 120 L0 120Z" fill="#7a9a6e"/>
+    <rect y="112" width="320" height="88" fill="#5fae4b"/>
+    <path d="M146 112 L174 112 L312 200 L8 200Z" fill="#55585f"/>
+    <path d="M146 112 L8 200" stroke="#e53935" stroke-width="7"/>
+    <path d="M146 112 L8 200" stroke="#fff" stroke-width="7" stroke-dasharray="9 9"/>
+    <path d="M174 112 L312 200" stroke="#e53935" stroke-width="7"/>
+    <path d="M174 112 L312 200" stroke="#fff" stroke-width="7" stroke-dasharray="9 9"/>
+    <path d="M160 116 L160 200" stroke="#f5f5f5" stroke-width="3" stroke-dasharray="8 10"/>
+    <g transform="translate(120 128)">
+      <rect x="8" y="50" width="22" height="20" rx="4" fill="#1a1a1a"/>
+      <rect x="50" y="50" width="22" height="20" rx="4" fill="#1a1a1a"/>
+      <rect x="2" y="16" width="76" height="8" rx="2" fill="#e53935"/>
+      <rect x="36" y="22" width="8" height="14" fill="#2a2a33"/>
+      <rect x="12" y="36" width="56" height="22" rx="6" fill="#e53935"/>
+      <circle cx="40" cy="30" r="13" fill="#e53935"/>
+      <rect x="18" y="56" width="10" height="5" fill="#ffa31a"/>
+      <rect x="52" y="56" width="10" height="5" fill="#ffa31a"/>
+    </g>
+  </svg>
+</template>
+
+<template id="casino-art">
+  <svg viewBox="0 0 320 200" aria-hidden="true">
+    <defs>
+      <radialGradient id="felt" cx="50%" cy="35%" r="75%">
+        <stop offset="0" stop-color="#1b8d55"/>
+        <stop offset=".6" stop-color="#0f6b3e"/>
+        <stop offset="1" stop-color="#073821"/>
+      </radialGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#felt)"/>
+    <path d="M20 40 Q160 150 300 40" fill="none" stroke="#f5c84c" stroke-opacity=".5" stroke-width="2"/>
+    <g transform="translate(118 46) rotate(-12)">
+      <rect width="62" height="88" rx="6" fill="#fff" stroke="#00000022"/>
+      <text x="8" y="20" font-family="Georgia" font-weight="700" font-size="16" fill="#16181d">A</text>
+      <text x="31" y="58" font-size="34" text-anchor="middle" fill="#16181d">♠</text>
+    </g>
+    <g transform="translate(150 40) rotate(10)">
+      <rect width="62" height="88" rx="6" fill="#fff" stroke="#00000022"/>
+      <text x="8" y="20" font-family="Georgia" font-weight="700" font-size="16" fill="#c61f2c">K</text>
+      <rect x="12" y="26" width="38" height="50" rx="3" fill="#f3dfa0" stroke="#c61f2c"/>
+      <text x="31" y="60" font-family="Georgia" font-weight="900" font-size="24" text-anchor="middle" fill="#c61f2c">K</text>
+    </g>
+    <g transform="translate(62 140)">
+      <circle r="22" fill="#1f1f22" stroke="#f5c84c" stroke-width="5" stroke-dasharray="6 6"/>
+      <circle r="12" fill="none" stroke="#f5c84c" stroke-opacity=".6" stroke-dasharray="3 3"/>
+    </g>
+    <g transform="translate(262 128)">
+      <circle r="22" fill="#d32f2f" stroke="#fff" stroke-width="5" stroke-dasharray="6 6"/>
+      <circle r="12" fill="none" stroke="#fff" stroke-opacity=".6" stroke-dasharray="3 3"/>
+    </g>
+    <g transform="translate(250 152)">
+      <circle r="22" fill="#2e7d32" stroke="#fff" stroke-width="5" stroke-dasharray="6 6"/>
+      <circle r="12" fill="none" stroke="#fff" stroke-opacity=".6" stroke-dasharray="3 3"/>
+    </g>
+  </svg>
+</template>
+
+<script>
+  // Add new games here. `art` is the id of a <template> holding the card picture.
+  const GAMES = [
+    {
+      title: 'Turbo Karts',
+      tag: 'Racing',
+      description: 'Drift, boost and throw bananas across 3 laps against 5 CPU racers.',
+      href: 'games/turbo-karts/index.html',
+      art: 'kart-art',
+      best: () => {
+        for (const d of ['hard', 'normal', 'easy']) {
+          const t = readNumber('turboKarts.best.' + d);
+          if (t) return `Best (${d}): <strong>${formatTime(t)}</strong>`;
+        }
+        return 'No races yet';
+      },
+    },
+    {
+      title: 'Golden Ace Casino',
+      tag: 'Cards',
+      description: 'Blackjack and Texas Hold\'em poker with chips that carry over between tables.',
+      href: 'games/casino/index.html',
+      art: 'casino-art',
+      best: () => `Chips: <strong>$${casinoChips().toLocaleString('en-US')}</strong>`,
+    },
+  ];
+
+  const COMING_SOON = [
+    { emoji: '🔢', title: '2048' },
+    { emoji: '🐍', title: 'Snake' },
+    { emoji: '💣', title: 'Minesweeper' },
+    { emoji: '🃏', title: 'Memory Match' },
+  ];
+
+  function casinoChips() {
+    try { if (localStorage.getItem('casino.balance') !== null) return readNumber('casino.balance'); } catch { /* storage unavailable */ }
+    return 1000;
+  }
+
+  function readNumber(key) {
+    try { return Number(JSON.parse(localStorage.getItem(key))) || 0; } catch { return 0; }
+  }
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const rest = (s - m * 60).toFixed(2).padStart(5, '0');
+    return `${m}:${rest}`;
+  }
+
+  const gamesEl = document.getElementById('games');
+  for (const g of GAMES) {
+    const a = document.createElement('a');
+    a.className = 'card';
+    a.href = g.href;
+    a.innerHTML = `
+      <div class="thumb"></div>
+      <div class="card-body">
+        <span class="tag">${g.tag}</span>
+        <h2>${g.title}</h2>
+        <p>${g.description}</p>
+        <div class="meta"><span class="best">${g.best()}</span><span class="play">Play</span></div>
+      </div>`;
+    a.querySelector('.thumb').append(document.getElementById(g.art).content.cloneNode(true));
+    gamesEl.append(a);
+  }
+
+  const comingEl = document.getElementById('coming');
+  for (const g of COMING_SOON) {
+    const div = document.createElement('div');
+    div.className = 'soon';
+    div.innerHTML = `<span class="emoji">${g.emoji}</span><span><b>${g.title}</b><small>Coming soon</small></span>`;
+    comingEl.append(div);
+  }
+
+  document.getElementById('chips').textContent = `$${casinoChips().toLocaleString('en-US')}`;
+
+  const suits = document.getElementById('suits');
+  ['♠', '♥', '♦', '♣'].flatMap((s) => [s, s, s, s]).forEach((suit) => {
+    const span = document.createElement('span');
+    span.textContent = suit;
+    if (suit === '♥' || suit === '♦') span.className = 'red';
+    span.style.left = `${Math.random() * 100}%`;
+    span.style.fontSize = `${28 + Math.random() * 52}px`;
+    const duration = 16 + Math.random() * 18;
+    span.style.animationDuration = `${duration}s`;
+    span.style.animationDelay = `${-Math.random() * duration}s`;
+    suits.append(span);
+  });
+</script>
+</body>
+</html>

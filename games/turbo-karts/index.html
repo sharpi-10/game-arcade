@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turbo Karts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --panel: rgba(13, 16, 38, .86);
+    --line: rgba(255, 255, 255, .14);
+    --text: #fff;
+    --muted: #b9bde6;
+    --accent: #ffcc33;
+    --accent2: #ff4d6d;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0f1226; color: var(--text);
+    font-family: Rubik, system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud[hidden] { display: none; }
+  .shadow-text { text-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 14px rgba(0, 0, 0, .35); }
+  .hud-tl { position: absolute; top: 16px; left: 16px; font-family: Bungee, sans-serif; }
+  .lap { font-size: 34px; line-height: 1; }
+  .lap .label { font-size: 18px; color: var(--accent); margin-right: 4px; }
+  .time { font-size: 20px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .best-lap { font-family: Rubik, sans-serif; font-weight: 700; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .hud-buttons { position: absolute; top: 112px; left: 16px; display: flex; gap: 8px; pointer-events: auto; }
+  .icon-btn {
+    width: 42px; height: 42px; border-radius: 12px; cursor: pointer;
+    background: rgba(13, 16, 38, .6); border: 1px solid var(--line);
+    color: #fff; font-size: 17px;
+  }
+  .item-slot {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: 84px; height: 84px; border-radius: 18px;
+    background: rgba(13, 16, 38, .55); border: 3px solid rgba(255, 255, 255, .85);
+    display: grid; place-items: center; font-size: 46px;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, .25);
+  }
+  .item-slot.rolling #item-icon { animation: jiggle .12s infinite; }
+  .item-slot .key {
+    position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; font-weight: 700; white-space: nowrap;
+    background: rgba(0, 0, 0, .5); padding: 2px 8px; border-radius: 6px;
+  }
+  @keyframes jiggle { 50% { transform: translateY(-3px) scale(1.08); } }
+  #minimap {
+    position: absolute; top: 16px; right: 16px; width: 240px; height: 140px;
+    background: rgba(13, 16, 38, .45); border-radius: 14px;
+  }
+  .pos {
+    position: absolute; right: 24px; bottom: 14px;
+    font-family: Bungee, sans-serif; font-size: 96px; line-height: 1;
+    color: var(--accent); text-shadow: 0 5px 0 #b3410f, 0 0 20px rgba(0, 0, 0, .4);
+  }
+  .pos sup { font-size: 36px; vertical-align: top; margin-left: 2px; }
+  .speedo {
+    position: absolute; left: 18px; bottom: 16px;
+    font-family: Bungee, sans-serif; font-size: 48px; line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .speedo small { font-size: 16px; margin-left: 6px; color: var(--muted); }
+  .banner {
+    position: absolute; top: 34%; left: 0; right: 0; text-align: center;
+    font-family: Bungee, sans-serif; font-size: clamp(56px, 12vw, 140px); line-height: 1;
+    color: #fff; opacity: 0;
+    -webkit-text-stroke: 3px #1b1f45; text-shadow: 0 8px 0 #1b1f45;
+  }
+  .banner.small { font-size: clamp(36px, 7vw, 72px); }
+  .banner.gold { color: var(--accent); }
+  .banner.show { animation: pop 1.2s ease-out forwards; }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(.4); }
+    14% { opacity: 1; transform: scale(1.12); }
+    28% { transform: scale(1); }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.04); }
+  }
+  .wrong-way {
+    position: absolute; top: 24%; left: 0; right: 0; text-align: center;
+    font-family: Bungee, sans-serif; font-size: 40px; color: var(--accent2);
+    animation: blink .7s steps(2) infinite;
+  }
+  .wrong-way[hidden] { display: none; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  /* ---------- Menus ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; overflow: auto;
+    display: grid; place-items: center; padding: 64px 16px 24px;
+    background: radial-gradient(ellipse at center, rgba(15, 18, 38, .15), rgba(15, 18, 38, .65));
+  }
+  .overlay[hidden] { display: none; }
+  .panel {
+    width: min(540px, 100%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 24px;
+    padding: 28px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  }
+  .logo {
+    font-family: Bungee, sans-serif; font-weight: 400;
+    font-size: clamp(46px, 11vw, 70px); line-height: .95; margin: 0; text-align: center;
+    background: linear-gradient(180deg, #ffe066, #ff8a00);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 0 #8a2b00);
+  }
+  .panel h2 { font-family: Bungee, sans-serif; font-weight: 400; font-size: 36px; margin: 0; text-align: center; }
+  .sub { text-align: center; color: var(--muted); margin: 10px 0 8px; }
+  .field-label {
+    font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 20px 0 10px;
+  }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .swatch {
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .25);
+    transition: transform .12s;
+  }
+  .swatch[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); }
+  .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, .07); }
+  .seg button {
+    flex: 1; padding: 10px; border: 0; border-radius: 10px; cursor: pointer;
+    background: transparent; color: #fff; font: 500 15px Rubik, sans-serif;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #2a1c00; font-weight: 700; }
+  .btn-primary {
+    display: block; width: 100%; margin-top: 24px; padding: 16px; cursor: pointer;
+    border: 0; border-radius: 16px;
+    font: 400 24px Bungee, sans-serif; color: #3a1d00;
+    background: linear-gradient(180deg, #ffd84d, #ff9f1a);
+    box-shadow: 0 6px 0 #b35c00;
+  }
+  .btn-primary:active { transform: translateY(4px); box-shadow: 0 2px 0 #b35c00; }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+  .btn {
+    flex: 1; display: block; text-align: center; text-decoration: none; cursor: pointer;
+    padding: 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .08); color: #fff; font: 500 15px Rubik, sans-serif;
+  }
+  .btn:hover { background: rgba(255, 255, 255, .14); }
+  .best-line { text-align: center; color: var(--muted); font-size: 14px; margin: 14px 0 0; min-height: 1em; }
+  .best-line strong { color: #fff; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: center;
+    font-size: 14px; color: var(--muted); margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+  }
+  .controls .keys { white-space: nowrap; }
+  kbd {
+    display: inline-block; min-width: 26px; padding: 2px 7px; text-align: center;
+    border-radius: 6px; background: rgba(255, 255, 255, .12); border-bottom: 2px solid rgba(255, 255, 255, .2);
+    color: #fff; font: 600 12px Rubik, sans-serif;
+  }
+  .tip { grid-column: 1 / -1; margin-top: 4px; color: var(--muted); font-size: 13px; }
+  .back-link {
+    position: fixed; top: 16px; left: 16px; z-index: 11;
+    color: #fff; text-decoration: none; font-weight: 500;
+    background: rgba(13, 16, 38, .7); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 999px;
+  }
+  .back-link[hidden] { display: none; }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-variant-numeric: tabular-nums; }
+  .results-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  .results-table td:first-child { font-family: Bungee, sans-serif; width: 44px; }
+  .results-table td:last-child { text-align: right; color: var(--muted); }
+  .results-table tr.me { background: rgba(255, 204, 51, .16); }
+  .results-table tr.me td:last-child { color: #fff; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+
+  /* ---------- Touch controls ---------- */
+  #touch {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 16px max(16px, env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+  #touch[hidden] { display: none; }
+  .tc-group { display: flex; gap: 12px; align-items: flex-end; }
+  .tc-col { display: flex; flex-direction: column; gap: 12px; }
+  .tc {
+    pointer-events: auto; touch-action: none;
+    width: 72px; height: 72px; border-radius: 50%;
+    background: rgba(13, 16, 38, .55); border: 2px solid rgba(255, 255, 255, .55);
+    color: #fff; font: 400 13px Bungee, sans-serif;
+  }
+  .tc.big { width: 92px; height: 92px; font-size: 16px; }
+  .tc.arrow { font-size: 28px; }
+  .tc.active { background: rgba(255, 204, 51, .6); }
+
+  @media (pointer: coarse) {
+    .speedo { display: none; }
+    .pos { bottom: auto; top: 170px; right: 16px; font-size: 56px; }
+    .pos sup { font-size: 22px; }
+  }
+  @media (max-width: 640px) {
+    #minimap { width: 150px; height: 88px; }
+    .lap { font-size: 24px; }
+    .time { font-size: 16px; }
+    .item-slot { width: 62px; height: 62px; font-size: 32px; left: 16px; top: 160px; transform: none; }
+    .hud-buttons { top: 92px; }
+    .pos { font-size: 64px; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-tl shadow-text">
+    <div class="lap"><span class="label">LAP</span><span id="lap">1/3</span></div>
+    <div class="time" id="time">0:00.00</div>
+    <div class="best-lap" id="best-lap"></div>
+  </div>
+  <div class="hud-buttons">
+    <button class="icon-btn" id="pause-btn" aria-label="Pause">❚❚</button>
+    <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
+  </div>
+  <div class="item-slot" id="item-slot"><span id="item-icon"></span><span class="key" id="item-key">X</span></div>
+  <canvas id="minimap"></canvas>
+  <div class="pos" id="pos">6<sup>th</sup></div>
+  <div class="speedo shadow-text"><span id="speed">0</span><small>km/h</small></div>
+  <div class="banner" id="banner"></div>
+  <div class="wrong-way" id="wrong-way" hidden>WRONG WAY!</div>
+</div>
+
+<a class="back-link" id="back-link" href="../../index.html">← Arcade</a>
+
+<div class="overlay" id="menu">
+  <div class="panel">
+    <h1 class="logo">TURBO<br>KARTS</h1>
+    <p class="sub">3 laps · 6 racers · drift to boost</p>
+    <div class="field-label">Your kart</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="field-label">Difficulty</div>
+    <div class="seg" id="difficulty">
+      <button data-d="easy">Easy</button>
+      <button data-d="normal">Normal</button>
+      <button data-d="hard">Hard</button>
+    </div>
+    <button class="btn-primary" id="start-btn">Start race</button>
+    <p class="best-line" id="best-line"></p>
+    <div class="controls">
+      <span class="keys"><kbd>↑</kbd> <kbd>W</kbd></span><span>Accelerate</span>
+      <span class="keys"><kbd>↓</kbd> <kbd>S</kbd></span><span>Brake / reverse</span>
+      <span class="keys"><kbd>←</kbd><kbd>→</kbd> <kbd>A</kbd><kbd>D</kbd></span><span>Steer</span>
+      <span class="keys"><kbd>Space</kbd></span><span>Hop &amp; drift: hold while turning, let go for a boost</span>
+      <span class="keys"><kbd>X</kbd> <kbd>E</kbd></span><span>Use item</span>
+      <span class="keys"><kbd>Esc</kbd></span><span>Pause</span>
+      <span class="tip">Tip: hold accelerate when the countdown shows <b>1</b> for a rocket start. The longer you drift, the bigger the boost: blue sparks, then orange.</span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause" hidden>
+  <div class="panel">
+    <h2>Paused</h2>
+    <button class="btn-primary" id="resume-btn">Resume</button>
+    <div class="btn-row">
+      <button class="btn" id="restart-btn">Restart race</button>
+      <button class="btn" id="menu-btn">Main menu</button>
+    </div>
+    <div class="btn-row"><a class="btn" href="../../index.html">Back to arcade</a></div>
+  </div>
+</div>
+
+<div class="overlay" id="results" hidden>
+  <div class="panel">
+    <h2 id="results-title">Finished!</h2>
+    <p class="sub" id="results-sub"></p>
+    <table class="results-table"><tbody id="results-body"></tbody></table>
+    <button class="btn-primary" id="again-btn">Race again</button>
+    <div class="btn-row">
+      <button class="btn" id="results-menu-btn">Change kart</button>
+      <a class="btn" href="../../index.html">Back to arcade</a>
+    </div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div class="tc-group">
+    <button class="tc arrow" data-touch="left" aria-label="Steer left">◀</button>
+    <button class="tc arrow" data-touch="right" aria-label="Steer right">▶</button>
+  </div>
+  <div class="tc-group">
+    <div class="tc-col">
+      <button class="tc" data-touch="item">Item</button>
+      <button class="tc" data-touch="drift">Drift</button>
+    </div>
+    <div class="tc-col">
+      <button class="tc" data-touch="brake">Brake</button>
+      <button class="tc big" data-touch="gas">Gas</button>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
