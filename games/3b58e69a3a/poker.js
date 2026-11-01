@@ -168,8 +168,35 @@ let handRunning = false;
 let humanTurn = null; // resolves the human's pending decision
 let usedBots = new Set();
 
+// ---------- Playing with friends ----------
+// The host runs the table: it seats people, shuffles, and decides for the bots. Each hand goes
+// out as one 'hand' message (seats, stacks, button and the whole deck), then every action in
+// order as 'act' messages, and each browser plays the hand out itself from those. Guests send
+// their own actions to the host, which passes them on.
+const TURN_LIMIT = 40000;
+const AUTO_DEAL = 6000;
+const RESYNC = Symbol('resync');
+let room = null;
+let mySeat = 0; // the seat nearest the camera
+let handNo = 0;
+let inbox = []; // guest: messages from the host, played in order
+let inboxWaiter = null;
+let pendingSits = new Map(); // host: friend id -> chips they're bringing to the next hand
+let remoteQueue = new Map(); // host: an action a friend sent before this table got to their turn
+let waitingRemote = null;
+let pendingBuyIn = 0; // guest: chips sent to the host, not yet at the table
+let autoDealTimer = 0;
+
+const isGuest = () => !!room && !room.isHost;
+const friendsAtTable = () => players.filter((p) => p.peer && !p.isHuman).length;
+const myId = () => (room ? room.id : 'me');
+const viewSeat = (seat) => (seat - mySeat + 4) % 4;
+const spotOf = (seat) => L().seats[viewSeat(seat)];
+const cardCode = (c) => c.s * BASE + c.r;
+const cardFrom = (n) => ({ r: n % BASE, s: Math.floor(n / BASE) });
+
 const alive = (s) => { if (s !== session) throw ABORT; };
-const human = () => players[0];
+const human = () => players.find((p) => p.isHuman);
 const live = () => players.filter((p) => !p.folded);
 const canAct = () => players.filter((p) => !p.folded && !p.allIn);
 const potTotal = () => players.reduce((a, p) => a + p.total, 0);
@@ -318,7 +345,7 @@ function buildTables() {
 }
 
 function cardSlot(p, i) {
-  const s = L().seats[p.seat];
+  const s = spotOf(p.seat);
   const spread = p.revealed || p.isHuman ? 0.6 : 0.36;
   const lx = (i ? 1 : -1) * spread;
   const yaw = p.revealed ? 0 : s.yaw;
@@ -327,7 +354,7 @@ function cardSlot(p, i) {
   return { x: cx + lx * Math.cos(yaw), y: 0.012 + i * 0.006, z: cz - lx * Math.sin(yaw), yaw };
 }
 const boardSlot = (i) => ({ x: (i - 2) * L().board.gap, y: 0.012, z: L().board.z, yaw: 0 });
-const platePoint = (p) => at(L().seats[p.seat].plate, 0.5);
+const platePoint = (p) => at(spotOf(p.seat).plate, 0.5);
 const deckTop = () => at(L().deck, 0.1);
 const balancePoint = () => t3.screenPoint(el.balance, 5);
 
@@ -347,11 +374,11 @@ function applyLayout(force = false) {
   for (const [n, t] of Object.entries(tables)) t.group.visible = n === name;
   deckMesh.position.copy(at(L().deck));
   deckMesh.rotation.y = name === 'tall' ? 0.2 : -0.25;
-  dealerButton.position.copy(at(L().seats[buttonSeat].button, 0.06));
+  dealerButton.position.copy(at(spotOf(buttonSeat).button, 0.06));
   pot.moveTo(at(L().pot), 0);
   for (const p of players) {
     p.cards.forEach((c, i) => { if (c.obj) t3.moveCard(c, cardSlot(p, i), 0); });
-    p.view.betStack.moveTo(at(L().seats[p.seat].bet), 0);
+    p.view.betStack.moveTo(at(spotOf(p.seat).bet), 0);
   }
   board.forEach((c, i) => { if (c.obj) t3.moveCard(c, boardSlot(i), 0); });
   setView(0);
@@ -374,7 +401,10 @@ function makePlayer(seat, look, stack, isHuman = false) {
 function buildSeats() {
   for (const p of players) {
     if (p.view) continue;
-    const label = t3.label(`seat seat-${p.seat}${p.isHuman ? ' me' : ''}`, () => at(L().seats[p.seat].plate), { clamp: true });
+    // Any seat can be yours when playing with friends, so each has the edit button and hint;
+    // CSS shows them only on the seat marked "me".
+    const seat = p.seat;
+    const label = t3.label('seat', () => at(spotOf(seat).plate), { clamp: true });
     const s = label.el;
     s.innerHTML = `
       <div class="plate">
@@ -384,15 +414,15 @@ function buildSeats() {
           <div class="seat-stack"></div>
         </div>
         <div class="bubble"></div>
-        ${p.isHuman ? '<button class="edit-me" type="button" aria-label="Customize your character" title="Customize your character">✎</button>' : ''}
-        ${p.isHuman ? '<div class="pk-hint"><b class="hint-hand"></b><span class="hint-odds"></span><div class="meter"><i></i></div></div>' : ''}
+        <button class="edit-me" type="button" aria-label="Customize your character" title="Customize your character">✎</button>
+        <div class="pk-hint"><b class="hint-hand"></b><span class="hint-odds"></span><div class="meter"><i></i></div></div>
       </div>`;
     p.view = {
       label,
       seat: s,
       plate: s.querySelector('.plate'),
       bubble: s.querySelector('.bubble'),
-      betStack: t3.stack(at(L().seats[p.seat].bet)),
+      betStack: t3.stack(at(spotOf(p.seat).bet)),
     };
     const edit = s.querySelector('.edit-me');
     if (edit) edit.addEventListener('click', () => profile.open());
@@ -405,7 +435,11 @@ function renderSeat(p) {
   const v = p.view;
   const avatar = v.seat.querySelector('.avatar');
   if (p.isHuman) avatar.innerHTML = profile.avatar();
+  else if (p.look) avatar.innerHTML = Arcade.character(p.look);
   else avatar.textContent = p.avatar;
+  for (let i = 0; i < 4; i++) v.seat.classList.toggle(`seat-${i}`, i === viewSeat(p.seat));
+  v.seat.classList.toggle('me', p.isHuman);
+  v.seat.classList.toggle('friend', !!p.peer && !p.isHuman);
   v.seat.querySelector('.nm').textContent = p.name;
   v.seat.style.setProperty('--accent', p.color);
   v.seat.querySelector('.seat-stack').textContent = p.allIn && p.stack === 0 && handRunning ? 'All-in' : fmt(p.stack);
@@ -425,7 +459,7 @@ function setTurn(p) {
 }
 
 function moveDealerButton() {
-  return t3.moveObject(dealerButton, at(L().seats[buttonSeat].button, 0.06), 600);
+  return t3.moveObject(dealerButton, at(spotOf(buttonSeat).button, 0.06), 600);
 }
 
 function updatePot() {
@@ -446,7 +480,7 @@ function showNext(show) {
 }
 
 function saveHumanStack() {
-  const stack = human() ? human().stack : 0;
+  const stack = (human() ? human().stack : 0) + pendingBuyIn;
   wallet.hold('poker', stack);
   Arcade.record('casino.chips', { chips: wallet.balance + stack });
 }
@@ -454,14 +488,13 @@ function saveHumanStack() {
 // ---------- Hint for the human ----------
 let hintTimer = 0;
 function hideHint() {
-  const hint = $('.pk-hint', el.stage);
-  if (hint) hint.style.visibility = 'hidden';
+  $$('.pk-hint', el.stage).forEach((hint) => { hint.style.visibility = 'hidden'; });
 }
 
 function updateHint() {
   const me = human();
-  const hint = $('.pk-hint', el.stage);
-  if (!hint || !me || me.cards.length < 2) return;
+  const hint = me && me.view && $('.pk-hint', me.view.seat);
+  if (!hint || me.cards.length < 2) return;
   if (me.folded) { hint.style.visibility = 'hidden'; return; }
   hint.style.visibility = 'visible';
   hint.querySelector('.hint-hand').textContent = board.length ? describe(evaluate([...me.cards, ...board])) : describeHole(me.cards);
@@ -512,47 +545,151 @@ async function award(p, amount) {
 
 // ---------- Hand flow ----------
 async function playHand() {
+  clearTimeout(autoDealTimer);
   const s = session;
   try {
-    await runHand(s);
+    if (isGuest()) await guestHands(s);
+    else await runHand(s);
   } catch (e) {
     if (e !== ABORT) throw e;
   }
 }
 
+// You on your own, or the host: decide the seats and the deck, tell the room, then play it.
 async function runHand(s) {
   showNext(false);
   if (human().stack <= 0) { showBuyIn(true); return; }
   handRunning = true;
+  await clearHand(s);
+  const setup = { t: 'hand', n: handNo + 1, seats: planSeats(), button: nextSeat(buttonSeat), deck: cards.makeDeck(1).map(cardCode) };
+  if (room) room.broadcast(setup);
+  await playSetup(s, setup);
+  if (human().stack <= 0) {
+    await sleep(1200);
+    alive(s);
+    showBuyIn(true);
+    return;
+  }
+  showNext(true);
+  if (players.some((p) => p.peer && !p.isHuman)) scheduleDeal(AUTO_DEAL);
+}
 
-  // Clear the last hand away.
+// A guest plays out each hand the host deals, in order.
+async function guestHands(s) {
+  for (;;) {
+    const setup = await nextMessage(s, 'hand');
+    handRunning = true;
+    try {
+      await clearHand(s);
+      await playSetup(s, setup);
+    } catch (e) {
+      if (e !== RESYNC) throw e;
+      continue; // the host moved on to a new hand; play that one
+    } finally {
+      handRunning = false;
+    }
+    const me = human();
+    if (me && me.stack <= 0 && !pendingBuyIn) {
+      await sleep(1200);
+      alive(s);
+      showBuyIn(true);
+    }
+  }
+}
+
+// Between hands with friends seated, the host deals on its own after a pause.
+function scheduleDeal(ms) {
+  clearTimeout(autoDealTimer);
+  const s = session;
+  autoDealTimer = setTimeout(() => { if (s === session && !el.next.hidden && el.buyin.hidden) playHand(); }, ms);
+}
+
+async function clearHand(s) {
   const old = [...board, ...players.flatMap((p) => p.cards)];
   players.forEach((p) => {
     p.view.bubble.textContent = '';
-    p.view.seat.classList.remove('winner', 'turn');
+    p.view.seat.classList.remove('winner', 'turn', 'thinking');
   });
   if (old.length) await t3.sweep(old, deckTop);
   alive(s);
+}
 
-  // Busted bots leave and new ones sit down.
-  for (let i = 1; i < players.length; i++) {
-    if (players[i].stack > 0) continue;
-    usedBots.delete(players[i].name);
-    players[i] = { ...makePlayer(i, pickBot(), BOT_STACK), view: players[i].view };
-    renderSeat(players[i]);
-    players[i].view.seat.classList.remove('joining');
-    void players[i].view.seat.offsetWidth;
-    players[i].view.seat.classList.add('joining');
-    setStatus(`${players[i].name} sits down`);
+const seatInfo = (p) => ({ name: p.name, color: p.color, avatar: p.avatar, peer: p.peer || null, look: p.isHuman ? Arcade.player.look : p.look || null, stack: p.stack });
+function botSeat() {
+  const b = pickBot();
+  return { name: b.name, color: b.color, avatar: b.avatar, peer: null, look: null, stack: BOT_STACK };
+}
+
+// Who sits where next hand. Busted bots make way for new ones, friends who left or ran out
+// give their seat back to a bot, and friends who bought in take a bot's seat.
+function planSeats() {
+  const waiting = new Map(pendingSits);
+  pendingSits.clear();
+  const seats = players.map((p) => {
+    if (p.isHuman) return seatInfo(p);
+    if (p.peer) {
+      const who = room && room.player(p.peer);
+      const sit = waiting.get(p.peer);
+      waiting.delete(p.peer);
+      const stack = p.stack + (sit ? sit.amount : 0);
+      if (who && stack > 0) return { ...seatInfo(p), name: who.name, look: who.look, color: sit ? sit.color : p.color, stack };
+    } else if (p.stack > 0) {
+      return seatInfo(p);
+    }
+    usedBots.delete(p.name);
+    return botSeat();
+  });
+  for (const [peer, sit] of waiting) {
+    const who = room && room.player(peer);
+    const i = seats.findIndex((d) => !d.peer);
+    if (!who || i < 0) continue;
+    usedBots.delete(seats[i].name);
+    seats[i] = { name: who.name, color: sit.color, avatar: '', peer, look: who.look, stack: sit.amount };
+  }
+  return seats;
+}
+
+function fromSeat(d, seat) {
+  const bot = !d.peer && BOTS.find((b) => b.name === d.name);
+  const p = makePlayer(seat, bot || { name: d.name, color: d.color, avatar: d.avatar, aggr: 0, loose: 0, bluff: 0 }, d.stack, d.peer === myId());
+  p.peer = d.peer;
+  p.look = d.look;
+  if (p.isHuman) Object.assign(p, { name: profile.name, color: profile.color });
+  return p;
+}
+
+// Put everyone in their seats for a hand, with a little hello for anyone new.
+async function seatPlayers(s, seats, { animate = true } = {}) {
+  const mine = seats.findIndex((d) => d.peer === myId());
+  const turned = mine >= 0 && mine !== mySeat;
+  if (mine >= 0) mySeat = mine;
+  if (mine >= 0 && isGuest()) pendingBuyIn = 0;
+  if (turned) applyLayout(true);
+  for (const [i, d] of seats.entries()) {
+    const old = players[i];
+    const p = fromSeat(d, i);
+    p.view = old.view;
+    players[i] = p;
+    renderSeat(p);
+    if (!animate || (old.name === d.name && (old.peer || null) === d.peer)) continue;
+    p.view.seat.classList.remove('joining');
+    void p.view.seat.offsetWidth;
+    p.view.seat.classList.add('joining');
+    setStatus(`${p.name} sits down`);
     await sleep(500);
     alive(s);
   }
+  if (isGuest()) saveHumanStack();
+}
 
+async function playSetup(s, setup) {
+  handNo = setup.n;
+  await seatPlayers(s, setup.seats);
   players.forEach((p) => Object.assign(p, { cards: [], bet: 0, total: 0, folded: false, allIn: false, acted: false, revealed: false }));
   players.forEach(renderSeat);
   board = [];
-  deck = cards.makeDeck(1);
-  buttonSeat = nextSeat(buttonSeat);
+  deck = setup.deck.map(cardFrom);
+  buttonSeat = setup.button;
   moveDealerButton();
   updatePot();
   setStatus('');
@@ -621,13 +758,6 @@ async function runHand(s) {
   handRunning = false;
   players.forEach(renderSeat);
   setActionBar(null);
-  if (human().stack <= 0) {
-    await sleep(1200);
-    alive(s);
-    showBuyIn(true);
-    return;
-  }
-  showNext(true);
 }
 
 async function bettingRound(s, start) {
@@ -642,7 +772,7 @@ async function bettingRound(s, start) {
     const p = players[i];
     if (!p.folded && !p.allIn && !(p.acted && p.bet === currentBet)) {
       setTurn(p);
-      const action = p.isHuman ? await askHuman(p) : await askBot(p, s);
+      const action = await getAction(p, s);
       alive(s);
       await apply(p, action);
       alive(s);
@@ -689,6 +819,132 @@ async function apply(p, action) {
   renderSeat(p);
 }
 
+// Whose decision is it? Yours from the buttons, a bot's from its head, a friend's over the
+// network. The host tells everyone what was chosen; guests wait to hear it, even for their own move.
+async function getAction(p, s) {
+  if (!room) return p.isHuman ? askHuman(p) : askBot(p, s);
+  if (room.isHost) {
+    let action;
+    if (p.isHuman) action = await askHuman(p);
+    else if (p.peer) action = await askRemote(p);
+    else action = await askBot(p, s);
+    alive(s);
+    room.broadcast({ t: 'act', n: handNo, seat: p.seat, action });
+    return action;
+  }
+  if (p.isHuman) {
+    askHuman(p).then((action) => { if (action && s === session) room.send({ t: 'act', n: handNo, seat: p.seat, action }); });
+  } else {
+    p.view.seat.classList.add('thinking');
+    setStatus(`${p.name} is thinking…`);
+  }
+  const msg = await nextMessage(s, 'act');
+  p.view.seat.classList.remove('thinking');
+  if (humanTurn) respond(null); // the host decided for you (you took too long)
+  setStatus('');
+  if (msg.seat !== p.seat) throw RESYNC;
+  return msg.action;
+}
+
+// A guest waits for the host's next message of a type. A new hand arriving mid-hand means the
+// host has moved on, so the guest drops this hand and plays the new one.
+function nextMessage(s, type) {
+  return new Promise((resolve, reject) => {
+    const pump = () => {
+      if (s !== session) { reject(ABORT); return; }
+      if (!inbox.length) { inboxWaiter = pump; return; }
+      const msg = inbox[0];
+      if (msg.t !== type) {
+        if (msg.t === 'hand') { reject(RESYNC); return; }
+        inbox.shift(); // an action from a hand this browser never saw start
+        pump();
+        return;
+      }
+      inbox.shift();
+      resolve(msg);
+    };
+    pump();
+  });
+}
+
+function wakeInbox() {
+  const w = inboxWaiter;
+  inboxWaiter = null;
+  if (w) w();
+}
+
+const cleanAction = (a) => ({
+  type: ['fold', 'check', 'call', 'raise'].includes(a && a.type) ? a.type : 'fold',
+  to: Math.max(0, Math.round(Number(a && a.to) || 0)),
+});
+
+// The host waits for a friend's move, or folds them (checks, if that's free) when they take too
+// long or leave.
+function askRemote(p) {
+  p.view.seat.classList.add('thinking');
+  setStatus(`${p.name} is thinking…`);
+  return new Promise((resolve) => {
+    const finish = (action) => {
+      clearTimeout(timer);
+      waitingRemote = null;
+      p.view.seat.classList.remove('thinking');
+      setStatus('');
+      resolve(cleanAction(action));
+    };
+    const fallback = () => finish({ type: currentBet > p.bet ? 'fold' : 'check' });
+    const timer = setTimeout(fallback, TURN_LIMIT);
+    waitingRemote = { peer: p.peer, seat: p.seat, finish, fallback };
+    const early = remoteQueue.get(p.peer);
+    remoteQueue.delete(p.peer);
+    if (!room.player(p.peer)) fallback();
+    else if (early && early.n === handNo && early.seat === p.seat) finish(early.action);
+  });
+}
+
+function onRoomMessage(msg, from) {
+  if (!msg || typeof msg !== 'object') return;
+  if (!room.isHost) {
+    if (msg.t === 'table') { if (!handRunning && !inbox.length) showTable(msg); return; }
+    if (msg.t === 'hand' || msg.t === 'act') { inbox.push(msg); wakeInbox(); }
+    return;
+  }
+  if (msg.t === 'hi') {
+    room.sendTo(from, { t: 'table', seats: players.map(seatInfo), button: buttonSeat });
+  } else if (msg.t === 'sit') {
+    const amount = Math.max(0, Math.round(Number(msg.amount) || 0));
+    if (!amount) return;
+    const prev = pendingSits.get(from);
+    pendingSits.set(from, { amount: amount + (prev ? prev.amount : 0), color: String(msg.color || '#4f9bff').slice(0, 9) });
+    if (!el.next.hidden) scheduleDeal(1500);
+  } else if (msg.t === 'act') {
+    if (waitingRemote && waitingRemote.peer === from && msg.seat === waitingRemote.seat && msg.n === handNo) waitingRemote.finish(msg.action);
+    else remoteQueue.set(from, msg);
+  }
+}
+
+// What a guest sees before their first hand: the table as the host has it.
+function showTable(msg) {
+  seatPlayers(session, msg.seats, { animate: false });
+  buttonSeat = msg.button;
+  moveDealerButton();
+  players.forEach(renderSeat);
+}
+
+function joinRoom(r) {
+  room = r;
+  inbox = [];
+  pendingSits = new Map();
+  remoteQueue = new Map();
+  waitingRemote = null;
+  if (!r) return;
+  r.on('message', onRoomMessage);
+  r.on('leave', (p) => {
+    if (r !== room) return;
+    pendingSits.delete(p.id);
+    if (waitingRemote && waitingRemote.peer === p.id) waitingRemote.fallback();
+  });
+}
+
 // ---------- Bots ----------
 function decide(p) {
   const opponents = live().length - 1;
@@ -726,7 +982,8 @@ async function askBot(p, s) {
   p.view.seat.classList.add('thinking');
   setStatus(`${p.name} is thinking…`);
   const action = decide(p);
-  await sleep(human().folded ? rand(350, 700) : rand(700, 1500));
+  const me = human();
+  await sleep(!me || me.folded ? rand(350, 700) : rand(700, 1500));
   p.view.seat.classList.remove('thinking');
   alive(s);
   setStatus('');
@@ -854,7 +1111,7 @@ async function showdown(s) {
     potLabel.hide();
     await award(w, amount);
     if (w.isHuman) {
-      Arcade.record('poker.pot', { amount, category: -1, showdown: false });
+      Arcade.record('poker.pot', { amount, category: -1, showdown: false, friends: friendsAtTable() });
       fx.banner(`You win<small>+${fmt(amount)}</small>`, 'win');
       sound.win();
       fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.55, 70);
@@ -904,14 +1161,14 @@ async function showdown(s) {
 
   const hand = describe(headline[0].score);
   if (humanWon > 0) {
-    Arcade.record('poker.pot', { amount: humanWon, category: Math.floor(human().score / CATEGORY_SIZE), showdown: true });
+    Arcade.record('poker.pot', { amount: humanWon, category: Math.floor(human().score / CATEGORY_SIZE), showdown: true, friends: friendsAtTable() });
     const big = humanWon >= 400 || Math.floor(headline[0].score / CATEGORY_SIZE) >= 4;
     fx.banner(`${headline.length > 1 ? 'Split pot' : 'You win'}<small>+${fmt(humanWon)} · ${hand}</small>`, 'win', 2200);
     if (big) { sound.bigWin(); fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.5, 160); } else { sound.win(); fx.confetti.burst(window.innerWidth / 2, window.innerHeight * 0.55, 70); }
   } else {
     const names = headline.map((p) => p.name).join(' & ');
     setStatus(`${names} ${headline.length > 1 ? 'split the pot' : 'wins'} with ${hand}`);
-    if (!human().folded) sound.lose();
+    if (human() && !human().folded) sound.lose();
   }
 }
 
@@ -944,6 +1201,15 @@ function showBuyIn(rebuy = false) {
 
 function sitDown(amount) {
   wallet.add(-amount);
+  if (isGuest()) {
+    // The host seats you when it deals the next hand.
+    el.buyin.hidden = true;
+    pendingBuyIn += amount;
+    saveHumanStack();
+    room.send({ t: 'sit', amount, color: profile.color });
+    setStatus('You\'re in from the next hand');
+    return;
+  }
   human().stack += amount;
   saveHumanStack();
   renderSeat(human());
@@ -954,14 +1220,22 @@ function sitDown(amount) {
 }
 
 const myLook = () => ({ name: profile.name, color: profile.color, aggr: 0, loose: 0, bluff: 0 });
+const OPEN_SEAT = { name: 'Open seat', avatar: '·', color: '#5b6b62', aggr: 0, loose: 0, bluff: 0 };
 
+// You sit nearest the camera with three bots. A guest sees open seats until the host's table arrives.
 function setupTable() {
   // Clear anything left from a previous visit.
   for (const c of [...board, ...players.flatMap((p) => p.cards)]) t3.removeCard(c);
   const views = players.map((p) => p.view);
   usedBots = new Set();
-  players = [makePlayer(0, myLook(), 0, true)];
-  for (let i = 1; i <= 3; i++) players.push(makePlayer(i, pickBot(), BOT_STACK));
+  mySeat = 0;
+  if (isGuest()) {
+    players = [0, 1, 2, 3].map((i) => makePlayer(i, OPEN_SEAT, 0));
+  } else {
+    players = [makePlayer(0, myLook(), 0, true)];
+    players[0].peer = myId();
+    for (let i = 1; i <= 3; i++) players.push(makePlayer(i, pickBot(), BOT_STACK));
+  }
   players.forEach((p, i) => { p.view = views[i]; });
   buttonSeat = Math.floor(Math.random() * players.length);
   board = [];
@@ -1003,8 +1277,15 @@ Casino.register('poker', {
     session++;
     if (!t3) buildTables();
     t3.setActive(true);
+    joinRoom(Casino.room && Casino.room.game === 'poker' ? Casino.room : null);
+    handNo = 0;
+    pendingBuyIn = 0;
     setupTable();
     showBuyIn();
+    if (isGuest()) {
+      room.send({ t: 'hi' });
+      playHand();
+    }
   },
   leave(force) {
     const me = human();
@@ -1012,10 +1293,15 @@ Casino.register('poker', {
       return 'Chips you have already put in this pot will be lost. The rest of your stack goes back to your balance.';
     }
     session++;
+    clearTimeout(autoDealTimer);
+    wakeInbox();
     if (humanTurn) respond({ type: 'fold' });
-    if (me && me.stack > 0) wallet.add(me.stack);
+    const back = (me ? me.stack : 0) + pendingBuyIn;
+    if (back > 0) wallet.add(back);
     if (me) me.stack = 0;
+    pendingBuyIn = 0;
     wallet.hold('poker', 0);
+    joinRoom(null);
     handRunning = false;
     el.buyin.hidden = true;
     showNext(false);

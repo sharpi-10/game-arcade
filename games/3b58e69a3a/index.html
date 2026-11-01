@@ -15,6 +15,7 @@
   <a class="back" id="back" href="../../index.html">← Arcade</a>
   <div class="brand"><span>♠</span> GOLDEN ACE <span class="red">♥</span></div>
   <div class="topbar-right">
+    <div class="room-chip" id="room-chip" title="Friends can join with this code" hidden><small>Room</small><b id="room-code"></b></div>
     <button class="profile-btn" id="profile-btn" aria-label="Customize your character" title="Customize your character">
       <span class="pf-avatar"></span><span class="pf-name"></span>
     </button>
@@ -53,6 +54,7 @@
         </div>
       </a>
     </div>
+    <div class="friends" id="friends"></div>
     <div class="refill" id="refill" hidden>
       <p>Running low on chips?</p>
       <button class="btn gold" id="refill-btn">Get $1,000 free chips</button>
@@ -142,6 +144,7 @@
 <div class="banner" id="banner" role="status"></div>
 
 <script src="../../shared/arcade.js"></script>
+<script src="../../shared/net.js"></script>
 <script src="rewards.js"></script>
 <script src="common.js"></script>
 <script src="profile.js"></script>

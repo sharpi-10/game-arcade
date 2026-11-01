@@ -30,6 +30,7 @@ Arcade.register({
     { id: 'karts.podium', title: 'Podium', desc: 'Finish a race in the top 3.', goal: 1, on: 'race', when: (d) => d.place <= 3, reward: { tickets: 50 } },
     { id: 'karts.win', title: 'Champion', desc: 'Win a race.', goal: 1, on: 'race', when: (d) => d.place === 1, reward: { tickets: 75, items: ['hat:helmet'] } },
     { id: 'karts.hard', title: 'Speed demon', desc: 'Win a race on Hard.', goal: 1, on: 'race', when: (d) => d.place === 1 && d.difficulty === 'hard', reward: { items: ['kartPaint:gold', 'outfit:racing', 'title:speedDemon'] } },
+    { id: 'karts.friends', title: 'Pit crew', desc: 'Finish a race against a friend.', goal: 1, on: 'race', when: (d) => d.friends > 0, reward: { tickets: 60 } },
     { id: 'karts.ten', title: 'Road warrior', desc: 'Finish 10 races.', goal: 10, on: 'race', reward: { tickets: 150, items: ['title:roadWarrior'] } },
   ],
 });

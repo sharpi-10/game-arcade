@@ -223,6 +223,21 @@ kbd {
 .gc-meta { display: flex; align-items: center; justify-content: space-between; font-size: 14px; color: var(--muted); }
 .gc-play { color: #3a2300; font-weight: 700; padding: 8px 18px; border-radius: 999px; background: linear-gradient(180deg, var(--gold-hi), var(--gold)); }
 .refill { margin-top: 32px; color: var(--muted); }
+/* ---------- Playing with friends ---------- */
+.friends {
+  width: min(560px, 100%); margin: 32px auto 0; padding: 20px; border-radius: 20px;
+  background: var(--panel); border: 1px solid rgba(245, 200, 76, .3);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .4);
+  --anet-accent: var(--gold); --anet-ink: #3a2300;
+}
+.friends .anet-head b { font-family: Cinzel, Georgia, serif; font-size: 20px; color: var(--gold); }
+.room-chip {
+  height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 999px;
+  background: rgba(245, 200, 76, .12); border: 1px solid rgba(245, 200, 76, .45); white-space: nowrap;
+}
+.room-chip small { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.room-chip b { font-weight: 800; letter-spacing: .16em; color: var(--gold-hi); }
+@media (max-width: 560px) { .room-chip small { display: none; } }
 
 /* ---------- Cards ---------- */
 .card {
@@ -380,6 +395,16 @@ kbd {
 .t3-total.twentyone { background: linear-gradient(180deg, var(--gold-hi), var(--gold)); color: #3a2300; border-color: #fff; }
 @keyframes badge-pop { from { transform: scale(.4); } }
 
+/* With friends: whose hands are whose, in front of their first hand. */
+.bj-name {
+  position: absolute; width: max-content; translate: -50% -50%;
+  display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px;
+  font-weight: 700; font-size: 13px; white-space: nowrap; color: var(--text);
+  background: rgba(0, 0, 0, .55); border: 1px solid rgba(255, 255, 255, .18);
+}
+.bj-name.me { border-color: var(--gold); color: var(--gold-hi); }
+.bj-name .av { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; }
+.bj-name .av svg { width: 100%; height: 100%; display: block; }
 /* Result tag: centred above the cards. */
 .t3-tag {
   position: absolute; width: max-content; translate: -50% -100%;
@@ -479,6 +504,12 @@ kbd {
   transition: border-color .3s, box-shadow .3s;
 }
 .seat-0 .plate { width: 204px; }
+.seat:not(.me) .edit-me, .seat:not(.me) .pk-hint { display: none; }
+.seat.friend .seat-name::after {
+  content: 'friend'; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: #3a2300; background: var(--accent);
+}
 /* Each player's colour tints their avatar and nameplate; yours glows. */
 .seat .plate { border-color: color-mix(in srgb, var(--accent) 40%, rgba(255, 255, 255, .08)); }
 .seat.me .plate {

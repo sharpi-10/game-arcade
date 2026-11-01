@@ -314,6 +314,7 @@ function route() {
     }
   }
   current = target;
+  if (room && target !== room.game) friends.leave(); // leaving the table leaves the room
   $$('.screen').forEach((s) => { s.hidden = s.id !== target; });
   const back = $('#back');
   if (target === 'lobby') {
@@ -346,6 +347,24 @@ document.addEventListener('keydown', (e) => {
   const game = games[current];
   if (game && game.key) game.key(e);
 });
+
+// ---------- Playing with friends ----------
+// The lobby's friends box opens or joins a room for one table and takes you there.
+let friends = null;
+let room = null;
+
+function setRoom(r) {
+  room = r;
+  $('#room-chip').hidden = !r;
+  if (r) {
+    $('#room-code').textContent = r.code;
+    go(r.game);
+  } else if (current !== 'lobby') {
+    // The host left: back to the lobby, where the friends box says why.
+    leaveConfirmed = true;
+    go('lobby');
+  }
+}
 
 function renderLobby() {
   $('#refill').hidden = wallet.balance >= 100;
@@ -384,6 +403,14 @@ function buildLobby() {
   chip($('#art-poker'), 500, '8%', '18%');
   chip($('#art-poker'), 1000, '84%', '62%');
   $('#refill-btn').addEventListener('click', () => { wallet.refill(); renderLobby(); });
+  friends = ArcadeNet.panel({
+    hosts: [{ game: 'poker', label: 'Host Hold\'em' }, { game: 'blackjack', label: 'Host Blackjack' }],
+    games: ['poker', 'blackjack'],
+    max: 4,
+    blurb: 'Up to 4 players at one table',
+    onRoom: setRoom,
+  });
+  $('#friends').append(friends.el);
 }
 
 function start() {
@@ -404,6 +431,7 @@ function start() {
 
 return {
   $, $$, sleep, rand, fmt, store, wallet, sound, ABORT, register, go, start,
+  get room() { return room; },
   cards: { makeDeck, shuffle, cardEl, rankLabel, SUITS, PIPS },
   chips: { chipEl },
   fx: { banner, floatText, confetti },

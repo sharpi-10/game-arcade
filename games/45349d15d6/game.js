@@ -7,6 +7,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const lerpAngle = (a, b, t) => a + wrapAngle(b - a) * t;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const suffix = (n) => (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
 const formatTime = (s) => {
   const m = Math.floor(s / 60);
@@ -57,9 +58,11 @@ if (oldColor !== null) {
   if (Arcade.player.look.kartPaint === 'red' && OLD_PAINTS[oldColor]) Arcade.setLook({ kartPaint: OLD_PAINTS[oldColor] }, { quiet: true });
   try { localStorage.removeItem('turboKarts.color'); } catch { /* storage unavailable */ }
 }
-function paintHex() {
-  const id = Arcade.player.look.kartPaint;
-  const item = Arcade.owns('kartPaint', id) && Arcade.item('kartPaint', id);
+// A driver's kart colour from their look. Your own paint has to be one you own; a friend's is
+// taken as sent.
+function paintHex(look = Arcade.player.look, mine = true) {
+  const id = look.kartPaint;
+  const item = (!mine || Arcade.owns('kartPaint', id)) && Arcade.item('kartPaint', id);
   return parseInt((item ? item.swatch : '#e53935').slice(1), 16);
 }
 
@@ -674,8 +677,192 @@ let camHeading = 0;
 let shake = 0;
 let menuAngle = 0;
 
+// ---------- Multiplayer ----------
+// In a room every browser drives its own kart and sends where it is; the host also drives the
+// CPU karts and passes everyone's positions on. Items are shared as events, and only the browser
+// that owns a kart decides whether something hit it.
+let room = null;
+let raceId = 0;
+let raceDiff = settings.difficulty;
+let netTimer = 0;
+let pauseShown = false; // in a room the race can't stop, so "pause" just shows the menu
+let netCount = 0;
+let waitingForRace = false;
+const NET_RATE = 0.05;
+
+const kartBySlot = (slot) => karts.find((k) => k.slot === slot);
+const kartByPeer = (id) => karts.find((k) => k.human && k.peer === id);
+const isGuest = () => !!room && !room.isHost;
+const netId = () => `${room ? room.id.slice(-5) : 'solo'}-${++netCount}`;
+const r2 = (v) => Math.round(v * 100) / 100;
+
+function soloLineup() {
+  return [{ id: room ? room.id : null, name: Arcade.player.name, look: Arcade.player.look }];
+}
+const roomLineup = () => (room ? room.players.map(({ id, name, look }) => ({ id, name, look })) : soloLineup());
+
+function packKart(k) {
+  if (!k.owned) return k.raw || null;
+  const flags = (k.driftDir > 0 ? 1 : k.driftDir < 0 ? 2 : 0) | (k.boost > 0 ? 4 : 0) | (k.spin > 0 ? 8 : 0) | (k.finished ? 16 : 0);
+  return [k.slot, r2(k.pos.x), r2(k.pos.z), r2(k.heading), r2(k.speed), k.lap, k.idx, flags,
+    r2(k.driftCharge), r2(k.hop), r2(k.invuln), r2(k.steer), r2(k.finishTime)];
+}
+
+function unpackKart(a, from = null) {
+  const k = Array.isArray(a) && kartBySlot(a[0]);
+  if (!k || k.owned) return;
+  if (from && k.peer !== from) return; // a guest may only move their own kart
+  const [, x, z, heading, speed, lap, idx, flags, driftCharge, hop, invuln, steer, finishTime] = a;
+  k.raw = a;
+  k.net = { x, z, heading, speed, at: performance.now() };
+  const spinning = (flags & 8) > 0;
+  Object.assign(k, {
+    lap, idx, driftCharge, hop, invuln, steer, finishTime,
+    driftDir: flags & 1 ? 1 : flags & 2 ? -1 : 0,
+    boost: flags & 4 ? 1 : 0,
+    spin: spinning ? Math.max(k.spin, 0.1) : 0,
+    finished: (flags & 16) > 0,
+  });
+  if (!spinning) k.spinAngle = 0;
+}
+
+// Someone else's kart: glide towards where it was last seen, carried forward by its speed.
+function updateRemote(k, dt) {
+  const n = k.net;
+  if (n) {
+    const age = Math.min(0.3, (performance.now() - n.at) / 1000);
+    const tx = n.x + Math.sin(n.heading) * n.speed * age;
+    const tz = n.z + Math.cos(n.heading) * n.speed * age;
+    const dx = tx - k.pos.x;
+    const dz = tz - k.pos.z;
+    if (dx * dx + dz * dz > 400) k.pos.set(tx, 0, tz);
+    else {
+      const t = 1 - Math.exp(-dt * 12);
+      k.pos.x += dx * t;
+      k.pos.z += dz * t;
+    }
+    k.heading = lerpAngle(k.heading, n.heading, 1 - Math.exp(-dt * 14));
+    k.speed = n.speed;
+  }
+  k.hop = Math.max(0, k.hop - dt);
+  k.invuln = Math.max(0, k.invuln - dt);
+  if (k.spin > 0) k.spinAngle += dt * 13;
+}
+
+// A kart whose driver left keeps racing under computer control.
+function takeOver(k) {
+  if (!k || k.owned) return;
+  Object.assign(k, { owned: true, auto: true, human: false, net: null, raw: null, skill: DIFFICULTIES[raceDiff].ai });
+  k.idx = nearestIndex(k.pos);
+  k.lane = k.laneTarget = clamp(lateralAt(k.pos, k.idx), -ROAD_HALF * 0.5, ROAD_HALF * 0.5);
+  if (k.model.tag) k.model.tag.visible = false;
+}
+
+function sendEvent(ev) {
+  if (!room) return;
+  ev.r = raceId;
+  if (room.isHost) room.broadcast(ev);
+  else room.send(ev);
+}
+
+function sendState(dt) {
+  netTimer -= dt;
+  if (!room || netTimer > 0) return;
+  netTimer = NET_RATE;
+  if (room.isHost) room.broadcast({ t: 'snap', r: raceId, k: karts.map(packKart).filter(Boolean) });
+  else room.send({ t: 'st', r: raceId, k: packKart(player) });
+}
+
+function applyEvent(ev) {
+  if (ev.t === 'box') {
+    const box = itemBoxes[ev.i];
+    if (box) { box.mesh.visible = false; box.respawn = 3; }
+  } else if (ev.t === 'banana') {
+    dropBanana(ev.x, ev.z, ev.h, ev.id);
+  } else if (ev.t === 'unbanana') {
+    const i = bananas.findIndex((b) => b.id === ev.id);
+    if (i >= 0) { scene.remove(bananas[i].mesh); bananas.splice(i, 1); }
+  } else if (ev.t === 'rocket') {
+    const owner = kartBySlot(ev.o);
+    if (owner) launchRocket(owner, ev.x, ev.z, ev.h, ev.i, kartBySlot(ev.g) || null, ev.id);
+  } else if (ev.t === 'boom') {
+    const i = rockets.findIndex((r) => r.id === ev.id);
+    if (i >= 0) { scene.remove(rockets[i].mesh); rockets.splice(i, 1); }
+    explode(ev.x, ev.z);
+  }
+}
+
+function onNetMessage(msg, from) {
+  if (!msg) return;
+  if (msg.t === 'start') {
+    if (!isGuest()) return;
+    if (!msg.lineup.some((p) => p.id === room.id)) { waitingForRace = true; return; }
+    raceId = msg.r;
+    waitingForRace = false;
+    startRace({ lineup: msg.lineup, difficulty: msg.difficulty });
+    return;
+  }
+  if (msg.t === 'busy') { waitingForRace = true; if (state === 'menu') renderMenu(); return; }
+  if (msg.r !== raceId || state === 'menu') return;
+  if (msg.t === 'end') { if (isGuest()) toMenu({ quiet: true }); return; }
+  if (msg.t === 'snap') { if (isGuest()) msg.k.forEach((a) => unpackKart(a)); return; }
+  if (msg.t === 'st') { if (room.isHost) unpackKart(msg.k, from); return; }
+  if (msg.t === 'quit') { if (room.isHost) takeOver(kartByPeer(from)); return; }
+  applyEvent(msg);
+  if (room.isHost) room.broadcast(msg, { except: from });
+}
+
+function onRoom(r) {
+  room = r;
+  waitingForRace = false;
+  if (r) {
+    r.on('message', onNetMessage);
+    r.on('players', () => {
+      if (r !== room || state !== 'menu') return;
+      setupKarts();
+      renderMenu();
+    });
+    r.on('join', (p) => { if (state !== 'menu') r.sendTo(p.id, { t: 'busy' }); });
+    r.on('leave', (p) => { if (state !== 'menu') takeOver(kartByPeer(p.id)); });
+    r.on('close', (reason) => {
+      if (r !== room) return;
+      room = null;
+      if (state === 'menu') { setupKarts(); renderMenu(); return; }
+      karts.forEach(takeOver);
+      setPaused(false);
+      if (reason) Arcade.toast(`<b>${reason}</b><span>Racing on against the computer</span>`);
+      if (!$('results').hidden) showResults();
+    });
+  }
+  if (state === 'menu') { setupKarts(); renderMenu(); }
+}
+
+// A floating name over a friend's kart.
+function addNameTag(k, name) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 64;
+  const g = c.getContext('2d');
+  g.font = '700 34px Rubik, Arial, sans-serif';
+  const w = Math.min(244, g.measureText(name).width + 28);
+  g.fillStyle = 'rgba(13, 16, 38, .78)';
+  g.beginPath();
+  g.roundRect((256 - w) / 2, 6, w, 52, 26);
+  g.fill();
+  g.fillStyle = '#fff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(name, 128, 33, 220);
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
+  tag.scale.set(4, 1, 1);
+  tag.position.set(0, 4.1, 0);
+  tag.renderOrder = 2;
+  k.model.root.add(tag);
+  k.model.tag = tag;
+}
+
 // Your character drives your kart: a cut-out of their head replaces the helmet.
-function addDriverHead(k) {
+function addDriverHead(k, look) {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const tex = new THREE.CanvasTexture(c);
@@ -691,22 +878,34 @@ function addDriverHead(k) {
     c.getContext('2d').drawImage(img, 0, 0, 256, 256);
     tex.needsUpdate = true;
   };
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(Arcade.character(undefined, { bg: false, crop: 'head' }))}`;
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(Arcade.character(look, { bg: false, crop: 'head' }))}`;
 }
 
-function setupKarts() {
+// The grid: CPU karts up front, then the people racing (just you, or everyone in the room).
+function setupKarts(lineup = roomLineup()) {
   karts.forEach((k) => k.dispose());
-  const mine = paintHex();
-  const others = KART_COLORS.filter((c) => c !== mine).slice(0, 5);
-  const diff = DIFFICULTIES[settings.difficulty];
+  const myId = room ? room.id : null;
+  const people = lineup.slice(0, 6);
+  const paints = people.map((p) => paintHex(p.look, p.id === myId));
+  const others = KART_COLORS.filter((c) => !paints.includes(c)).slice(0, 6 - people.length);
+  const diff = DIFFICULTIES[raceDiff];
   karts = others.map((c, i) => new Kart(CPU_NAMES[i], c, false));
-  player = new Kart(Arcade.player.name, mine, true);
-  addDriverHead(player);
-  karts.push(player);
+  for (const [i, p] of people.entries()) {
+    const k = new Kart(p.name, paints[i], p.id === myId);
+    Object.assign(k, { human: true, peer: p.id });
+    addDriverHead(k, p.look);
+    if (!k.isPlayer) addNameTag(k, p.name);
+    karts.push(k);
+  }
+  player = karts.find((k) => k.isPlayer) || karts[karts.length - 1];
   const skills = [1.04, 1.02, 1.0, 0.97, 0.95];
   karts.forEach((k, slot) => {
     k.reset();
-    k.skill = k.isPlayer ? 1 : diff.ai * skills[slot];
+    k.slot = slot;
+    k.owned = k.isPlayer || (!k.human && !isGuest());
+    k.net = null;
+    k.raw = null;
+    k.skill = k.human ? 1 : diff.ai * skills[slot];
     const row = Math.floor(slot / 2);
     const col = slot % 2;
     const back = 8 + row * 8 + col * 4;
@@ -728,11 +927,24 @@ function setupKarts() {
   computeOrder();
 }
 
-function startRace() {
+// The host (or a solo player) starts a race; in a room everyone gets the same grid.
+function hostStart() {
+  if (isGuest()) return;
+  if (!room) { startRace(); return; }
+  raceId++;
+  const lineup = roomLineup();
+  room.broadcast({ t: 'start', r: raceId, lineup, difficulty: settings.difficulty });
+  startRace({ lineup });
+}
+
+function startRace({ lineup, difficulty = settings.difficulty } = {}) {
   audio.init();
-  setupKarts();
+  raceDiff = difficulty;
+  setupKarts(lineup);
   state = 'countdown';
   paused = false;
+  pauseShown = false;
+  netTimer = 0;
   countdown = 3.4;
   lastCount = 0;
   startPressAt = null;
@@ -750,9 +962,16 @@ function startRace() {
   updateHud();
 }
 
-function toMenu() {
+// Leaving a race in a room: the host ends it for everyone; a guest's kart is handed to the computer.
+function toMenu({ quiet = false } = {}) {
+  if (room && state !== 'menu' && !quiet) {
+    if (room.isHost) room.broadcast({ t: 'end', r: raceId });
+    else room.send({ t: 'quit', r: raceId });
+  }
   state = 'menu';
   paused = false;
+  pauseShown = false;
+  raceDiff = settings.difficulty;
   setupKarts();
   $('menu').hidden = false;
   $('pause').hidden = true;
@@ -766,8 +985,22 @@ function toMenu() {
 
 function setPaused(p) {
   if (state !== 'countdown' && state !== 'racing') return;
+  if (room) {
+    pauseShown = p;
+    $('pause').hidden = !p;
+    $('restart-btn').hidden = isGuest();
+    $('pause-title').textContent = p ? 'Menu' : 'Paused';
+    $('pause-note').hidden = false;
+    $('pause-note').textContent = room.isHost
+      ? 'The race keeps going for everyone. Main menu ends it for all.'
+      : 'The race keeps going. Main menu leaves it and the computer drives your kart.';
+    return;
+  }
   paused = p;
   $('pause').hidden = !p;
+  $('restart-btn').hidden = false;
+  $('pause-title').textContent = 'Paused';
+  $('pause-note').hidden = true;
   if (audio.ctx) audio.engine(0, false, false);
 }
 
@@ -782,7 +1015,7 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   keys.add(e.code);
   if (e.code === 'KeyX' || e.code === 'KeyE') itemQueued = true;
-  if (e.code === 'Escape' || e.code === 'KeyP') setPaused(!paused);
+  if (e.code === 'Escape' || e.code === 'KeyP') setPaused(!(paused || pauseShown));
   if (e.code === 'KeyM') toggleMute();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -803,6 +1036,7 @@ document.querySelectorAll('[data-touch]').forEach((btn) => {
 });
 
 function readPlayerInput() {
+  if (pauseShown) { itemQueued = false; return NO_INPUT; }
   const has = (...codes) => codes.some((c) => keys.has(c));
   const up = has('ArrowUp', 'KeyW') || touch.gas;
   const down = has('ArrowDown', 'KeyS') || touch.brake;
@@ -1000,7 +1234,7 @@ function updateKart(k, input, dt) {
     k.roll -= dt;
     if (k.roll <= 0) {
       k.item = k.rollItem;
-      k.itemTimer = rand(1, 5) / DIFFICULTIES[settings.difficulty].items;
+      k.itemTimer = rand(1, 5) / DIFFICULTIES[raceDiff].items;
       if (showFx) audio.tone(1200, 0.07, 'square', 0.1);
     }
   }
@@ -1062,26 +1296,40 @@ function useItem(k) {
     k.boost = Math.max(k.boost, 1.6);
     if (loud) audio.tone(160, 0.45, 'sawtooth', 0.14, 620);
   } else if (k.item === 'banana') {
-    const mesh = buildBanana();
-    const x = k.pos.x - fx * 3.6;
-    const z = k.pos.z - fz * 3.6;
-    mesh.position.set(x, 0, z);
-    mesh.rotation.y = k.heading;
-    scene.add(mesh);
-    const idx = nearestIndex({ x, z }, k.idx);
-    bananas.push({ mesh, x, z, lat: lateralAt({ x, z }, idx) });
-    if (bananas.length > 24) scene.remove(bananas.shift().mesh);
-    if (loud) audio.tone(330, 0.12, 'triangle', 0.15, 200);
+    const x = r2(k.pos.x - fx * 3.6);
+    const z = r2(k.pos.z - fz * 3.6);
+    const id = netId();
+    dropBanana(x, z, r2(k.heading), id, k.idx);
+    sendEvent({ t: 'banana', id, x, z, h: r2(k.heading) });
   } else if (k.item === 'rocket') {
-    const mesh = buildRocket();
-    const pos = new THREE.Vector3(k.pos.x + fx * 3, 1.1, k.pos.z + fz * 3);
-    mesh.position.copy(pos);
-    scene.add(mesh);
+    const x = r2(k.pos.x + fx * 3);
+    const z = r2(k.pos.z + fz * 3);
     const target = k.rank > 0 ? order[k.rank - 1] : null;
-    rockets.push({ mesh, pos, heading: k.heading, owner: k, target, life: 5, idx: k.idx });
-    if (loud) { audio.noise(0.35, 0.2); audio.tone(600, 0.4, 'sawtooth', 0.08, 150); }
+    const id = netId();
+    launchRocket(k, x, z, r2(k.heading), k.idx, target, id);
+    sendEvent({ t: 'rocket', id, x, z, h: r2(k.heading), i: k.idx, o: k.slot, g: target ? target.slot : -1 });
   }
   k.item = null;
+}
+
+function dropBanana(x, z, heading, id, hint = null) {
+  const mesh = buildBanana();
+  mesh.position.set(x, 0, z);
+  mesh.rotation.y = heading;
+  scene.add(mesh);
+  const idx = nearestIndex({ x, z }, hint);
+  bananas.push({ mesh, x, z, id, lat: lateralAt({ x, z }, idx) });
+  if (bananas.length > 24) scene.remove(bananas.shift().mesh);
+  if (Math.hypot(x - player.pos.x, z - player.pos.z) < 40) audio.tone(330, 0.12, 'triangle', 0.15, 200);
+}
+
+function launchRocket(owner, x, z, heading, idx, target, id) {
+  const mesh = buildRocket();
+  const pos = new THREE.Vector3(x, 1.1, z);
+  mesh.position.copy(pos);
+  scene.add(mesh);
+  rockets.push({ mesh, pos, heading, owner, target, life: 5, idx, id });
+  if (Math.hypot(x - player.pos.x, z - player.pos.z) < 40) { audio.noise(0.35, 0.2); audio.tone(600, 0.4, 'sawtooth', 0.08, 150); }
 }
 
 function explode(x, z) {
@@ -1097,7 +1345,7 @@ function explode(x, z) {
 
 // ---------- World updates ----------
 function updateItemBoxes(dt, racing) {
-  for (const box of itemBoxes) {
+  for (const [bi, box] of itemBoxes.entries()) {
     if (box.respawn > 0) {
       box.respawn -= dt;
       if (box.respawn <= 0) box.mesh.visible = true;
@@ -1107,9 +1355,10 @@ function updateItemBoxes(dt, racing) {
     box.mesh.position.y = 1.7 + Math.sin(clock * 2.5 + box.phase) * 0.25;
     if (!racing) continue;
     for (const k of karts) {
-      if ((k.pos.x - box.x) ** 2 + (k.pos.z - box.z) ** 2 > 2.7 * 2.7) continue;
+      if (!k.owned || (k.pos.x - box.x) ** 2 + (k.pos.z - box.z) ** 2 > 2.7 * 2.7) continue;
       box.mesh.visible = false;
       box.respawn = 3;
+      sendEvent({ t: 'box', i: bi });
       if (!k.item && k.roll <= 0) {
         k.roll = k.isPlayer && !k.auto ? 1.1 : 0.6;
         k.rollItem = pickItem(k);
@@ -1127,10 +1376,11 @@ function updateBananas() {
   for (let i = bananas.length - 1; i >= 0; i--) {
     const b = bananas[i];
     for (const k of karts) {
-      if ((k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2 > 2.1 * 2.1 || k.spin > 0 || k.invuln > 0) continue;
+      if (!k.owned || (k.pos.x - b.x) ** 2 + (k.pos.z - b.z) ** 2 > 2.1 * 2.1 || k.spin > 0 || k.invuln > 0) continue;
       hitKart(k, 1.0);
       scene.remove(b.mesh);
       bananas.splice(i, 1);
+      sendEvent({ t: 'unbanana', id: b.id });
       break;
     }
   }
@@ -1162,9 +1412,10 @@ function updateRockets(dt) {
     let done = r.life <= 0 || Math.abs(lateralAt(r.pos, r.idx)) > WALL;
     for (const k of karts) {
       if (done) break;
-      if (k === r.owner && r.life > 4.5) continue;
+      if (!k.owned || (k === r.owner && r.life > 4.5)) continue;
       if ((k.pos.x - r.pos.x) ** 2 + (k.pos.z - r.pos.z) ** 2 < 2.4 * 2.4) {
         hitKart(k, 1.4);
+        sendEvent({ t: 'boom', id: r.id, x: r2(r.pos.x), z: r2(r.pos.z) });
         done = true;
       }
     }
@@ -1204,12 +1455,17 @@ function collideKarts() {
       const push = (minD - d) / 2;
       const nx = dx / d;
       const nz = dz / d;
-      a.pos.x -= nx * push;
-      a.pos.z -= nz * push;
-      b.pos.x += nx * push;
-      b.pos.z += nz * push;
-      a.speed *= 0.985;
-      b.speed *= 0.985;
+      // Each browser only shoves the karts it drives; the other side does the same for theirs.
+      if (a.owned) {
+        a.pos.x -= nx * push;
+        a.pos.z -= nz * push;
+        a.speed *= 0.985;
+      }
+      if (b.owned) {
+        b.pos.x += nx * push;
+        b.pos.z += nz * push;
+        b.speed *= 0.985;
+      }
       if ((a === player || b === player) && player.bumpCooldown <= 0) {
         audio.noise(0.1, 0.15);
         player.bumpCooldown = 0.4;
@@ -1372,7 +1628,7 @@ function drawMinimap() {
   const [sx, sy] = mm.map(P[0].x, P[0].z);
   g.fillStyle = '#fff';
   g.fillRect(sx - 1.5, sy - 5, 3, 10);
-  for (const k of karts) { // the player is last, so drawn on top
+  for (const k of [...karts.filter((o) => o !== player), player]) { // the player goes on top
     const [x, y] = mm.map(k.pos.x, k.pos.z);
     g.beginPath();
     g.arc(x, y, k.isPlayer ? 5.5 : 4, 0, Math.PI * 2);
@@ -1413,11 +1669,11 @@ function finishRace() {
   player.finishPlace = place;
   showBanner('FINISH!', 'gold');
   [523, 659, 784, 1046].forEach((f, i) => audio.tone(f, 0.18, 'square', 0.12, null, i * 0.12));
-  const key = `turboKarts.best.${settings.difficulty}`;
+  const key = `turboKarts.best.${raceDiff}`;
   const best = store.get(key, 0);
   player.newRecord = !best || player.finishTime < best;
   if (player.newRecord) store.set(key, player.finishTime);
-  Arcade.record('race', { place, difficulty: settings.difficulty, time: player.finishTime });
+  Arcade.record('race', { place, difficulty: raceDiff, time: player.finishTime, friends: karts.filter((k) => k.human).length - 1 });
   resultsTimer = 2.6;
 }
 
@@ -1427,8 +1683,11 @@ function showResults() {
   const bits = [`Time ${formatTime(player.finishTime)}`];
   if (player.bestLap < Infinity) bits.push(`best lap ${formatTime(player.bestLap)}`);
   if (player.newRecord) bits.push('new record!');
-  $('results-sub').textContent = `${bits.join(' · ')} (${DIFFICULTIES[settings.difficulty].label})`;
+  $('results-sub').textContent = `${bits.join(' · ')} (${DIFFICULTIES[raceDiff].label})`;
   renderResultsTable();
+  $('again-btn').hidden = isGuest();
+  $('results-wait').hidden = !isGuest();
+  $('results-menu-btn').textContent = room ? 'Main menu' : 'Change kart';
   $('results').hidden = false;
   $('back-link').hidden = true;
 }
@@ -1437,7 +1696,7 @@ function renderResultsTable() {
   $('results-body').innerHTML = order.map((k, i) => `
     <tr class="${k.isPlayer ? 'me' : ''}">
       <td>${i + 1}</td>
-      <td><span class="dot" style="background:#${k.color.toString(16).padStart(6, '0')}"></span>${k.name}</td>
+      <td><span class="dot" style="background:#${k.color.toString(16).padStart(6, '0')}"></span>${esc(k.name)}${k.human && !k.isPlayer ? ' <small class="friend">friend</small>' : ''}</td>
       <td>${k.finished ? formatTime(k.finishTime) : 'racing…'}</td>
     </tr>`).join('');
 }
@@ -1445,6 +1704,7 @@ function renderResultsTable() {
 function updateRace(dt) {
   raceTime += dt;
   for (const k of karts) {
+    if (!k.owned) { updateRemote(k, dt); continue; }
     const input = k.auto ? aiInput(k, dt) : readPlayerInput();
     updateKart(k, input, dt);
   }
@@ -1487,7 +1747,10 @@ function updateCountdown(dt) {
     }
   }
   updateItemBoxes(dt, false);
-  for (const k of karts) syncModel(k, dt);
+  for (const k of karts) {
+    if (!k.owned) updateRemote(k, dt);
+    syncModel(k, dt);
+  }
 }
 
 function update(dt) {
@@ -1499,6 +1762,7 @@ function update(dt) {
   }
   if (state === 'countdown') updateCountdown(dt);
   else updateRace(dt);
+  sendState(dt);
   followCamera(dt);
   updateHud();
   const revving = state === 'countdown' && startPressAt !== null;
@@ -1540,15 +1804,30 @@ function renderMenu() {
   }
   document.querySelectorAll('#difficulty button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.d === settings.difficulty));
+    b.disabled = isGuest();
   });
   const best = store.get(`turboKarts.best.${settings.difficulty}`, 0);
   $('best-line').innerHTML = best
     ? `Your best on ${DIFFICULTIES[settings.difficulty].label}: <strong>${formatTime(best)}</strong>`
     : '';
+  // In a room only the host starts races; the button says who's coming.
+  const start = $('start-btn');
+  start.disabled = isGuest();
+  if (!room) start.textContent = 'Start race';
+  else if (room.isHost) start.textContent = room.players.length > 1 ? `Start race · ${room.players.length} drivers` : 'Start race';
+  else start.textContent = 'Waiting for the host…';
+  $('mp-note').hidden = !isGuest();
+  $('mp-note').textContent = waitingForRace
+    ? 'A race is already on. You\'ll be on the grid for the next one.'
+    : 'The host picks the difficulty and starts the race.';
+  $('menu-sub').textContent = room && room.players.length > 1
+    ? `3 laps · ${room.players.length} drivers + ${Math.max(0, 6 - room.players.length)} CPU · drift to boost`
+    : '3 laps · 6 racers · drift to boost';
 }
 
 document.querySelectorAll('#difficulty button').forEach((b) => {
   b.onclick = () => {
+    if (isGuest()) return;
     settings.difficulty = b.dataset.d;
     store.set('turboKarts.difficulty', b.dataset.d);
     renderMenu();
@@ -1563,16 +1842,22 @@ function toggleMute() {
 $('driver-btn').onclick = () => Arcade.open();
 // A new look or paint shows up on the grid straight away.
 Arcade.onChange(() => {
-  if (state !== 'menu') return;
+  if (state !== 'menu' || room) return; // in a room, the new look comes back with the player list
   setupKarts();
   renderMenu();
 });
-$('start-btn').onclick = startRace;
-$('again-btn').onclick = startRace;
-$('restart-btn').onclick = startRace;
+$('start-btn').onclick = hostStart;
+$('again-btn').onclick = hostStart;
+$('restart-btn').onclick = hostStart;
 $('resume-btn').onclick = () => setPaused(false);
-$('menu-btn').onclick = toMenu;
-$('results-menu-btn').onclick = toMenu;
+$('menu-btn').onclick = () => toMenu();
+$('results-menu-btn').onclick = () => toMenu();
+$('mp').append(ArcadeNet.panel({
+  hosts: [{ game: 'karts', label: 'Host a race' }],
+  max: 6,
+  blurb: 'Up to 6 drivers',
+  onRoom,
+}).el);
 $('pause-btn').onclick = () => setPaused(true);
 $('mute-btn').onclick = toggleMute;
 $('mute-btn').textContent = audio.muted ? '🔇' : '🔊';

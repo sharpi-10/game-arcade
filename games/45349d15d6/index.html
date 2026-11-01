@@ -18,6 +18,7 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body {
     margin: 0; height: 100%; overflow: hidden;
     background: #0f1226; color: var(--text);
@@ -190,6 +191,10 @@
   .results-table td:last-child { text-align: right; color: var(--muted); }
   .results-table tr.me { background: rgba(255, 204, 51, .16); }
   .results-table tr.me td:last-child { color: #fff; }
+  .results-table .friend { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-left: 6px; }
+  .mp { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); --anet-accent: var(--accent); }
+  .btn-primary:disabled { opacity: .55; cursor: default; transform: none; box-shadow: 0 6px 0 #b35c00; }
+  .seg button:disabled { cursor: default; opacity: .6; }
   .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
 
   /* ---------- Touch controls ---------- */
@@ -254,7 +259,7 @@
 <div class="overlay" id="menu">
   <div class="panel">
     <h1 class="logo">TURBO<br>KARTS</h1>
-    <p class="sub">3 laps · 6 racers · drift to boost</p>
+    <p class="sub" id="menu-sub">3 laps · 6 racers · drift to boost</p>
     <button class="driver" id="driver-btn" type="button" aria-label="Your character, tickets, quests and prizes">
       <span class="driver-face" id="driver-face"></span>
       <span class="driver-text"><small>Driver</small><b id="driver-name"></b><span id="driver-tix"></span></span>
@@ -269,7 +274,9 @@
       <button data-d="hard">Hard</button>
     </div>
     <button class="btn-primary" id="start-btn">Start race</button>
+    <p class="best-line" id="mp-note" hidden></p>
     <p class="best-line" id="best-line"></p>
+    <div class="mp" id="mp"></div>
     <div class="controls">
       <span class="keys"><kbd>↑</kbd> <kbd>W</kbd></span><span>Accelerate</span>
       <span class="keys"><kbd>↓</kbd> <kbd>S</kbd></span><span>Brake / reverse</span>
@@ -284,7 +291,8 @@
 
 <div class="overlay" id="pause" hidden>
   <div class="panel">
-    <h2>Paused</h2>
+    <h2 id="pause-title">Paused</h2>
+    <p class="sub" id="pause-note" hidden></p>
     <button class="btn-primary" id="resume-btn">Resume</button>
     <div class="btn-row">
       <button class="btn" id="restart-btn">Restart race</button>
@@ -300,6 +308,7 @@
     <p class="sub" id="results-sub"></p>
     <table class="results-table"><tbody id="results-body"></tbody></table>
     <button class="btn-primary" id="again-btn">Race again</button>
+    <p class="best-line" id="results-wait" hidden>Waiting for the host to start the next race…</p>
     <div class="btn-row">
       <button class="btn" id="results-menu-btn">Change kart</button>
       <a class="btn" href="../../index.html">Back to arcade</a>
@@ -325,6 +334,7 @@
 </div>
 
 <script src="../../shared/arcade.js"></script>
+<script src="../../shared/net.js"></script>
 <script src="rewards.js"></script>
 <script src="game.js"></script>
 </body>

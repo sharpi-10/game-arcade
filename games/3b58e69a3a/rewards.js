@@ -29,6 +29,8 @@ Arcade.register({
     { id: 'casino.pot', title: 'Take it down', desc: 'Win a poker pot.', goal: 1, on: 'poker.pot', reward: { tickets: 40 } },
     { id: 'casino.flush', title: 'Flush with cash', desc: 'Win a poker showdown with a flush or better.', goal: 1, on: 'poker.pot', when: (d) => d.showdown && d.category >= 5, reward: { items: ['glasses:shades'] } },
     { id: 'casino.shark', title: 'Card shark', desc: 'Win 25 poker pots.', goal: 25, on: 'poker.pot', reward: { tickets: 200, items: ['title:cardShark'] } },
+    { id: 'casino.friendsBj', title: 'Table for two', desc: 'Play a blackjack hand at a table with a friend.', goal: 1, on: 'bj.hand', when: (d) => d.friends > 0, reward: { tickets: 40 } },
+    { id: 'casino.friendsPoker', title: 'Friendly fire', desc: 'Win a poker pot at a table with a friend.', goal: 1, on: 'poker.pot', when: (d) => d.friends > 0, reward: { tickets: 60 } },
     { id: 'casino.roller', title: 'High roller', desc: 'Have $5,000 in casino chips.', goal: 5000, on: 'casino.chips', mode: 'max', value: (d) => d.chips, reward: { items: ['hat:tophat', 'outfit:tux', 'title:highRoller'] } },
   ],
 });
