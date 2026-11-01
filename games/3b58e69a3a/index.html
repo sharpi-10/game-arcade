@@ -53,6 +53,14 @@
           <div class="gc-meta"><span>Blinds $10 / $20</span><span class="gc-play">Play</span></div>
         </div>
       </a>
+      <a class="game-card" href="#eights">
+        <div class="gc-art" id="art-eights"></div>
+        <div class="gc-body">
+          <h2>Crazy Eights</h2>
+          <p>Match the suit or the number and be the first to empty your hand. Eights are wild: play one to pick the next suit.</p>
+          <div class="gc-meta"><span>Free to play · win tickets</span><span class="gc-play">Play</span></div>
+        </div>
+      </a>
     </div>
     <div class="friends" id="friends"></div>
     <div class="refill" id="refill" hidden>
@@ -128,6 +136,30 @@
   </div>
 </section>
 
+<!-- ---------- Crazy Eights ---------- -->
+<section class="screen table-screen" id="eights" hidden>
+  <div class="stage" id="ce-stage"></div>
+
+  <div class="ce-dock" id="ce-dock">
+    <div class="ce-status" id="ce-status" role="status"></div>
+    <div class="ce-hand" id="ce-hand"></div>
+    <div class="ce-buttons">
+      <button class="btn blue" id="ce-draw">Draw<kbd>D</kbd></button>
+      <button class="btn ghost" id="ce-pass">Pass<kbd>P</kbd></button>
+      <button class="btn gold" id="ce-next" hidden>Deal again<kbd>Space</kbd></button>
+    </div>
+  </div>
+
+  <div class="modal" id="ce-suits" hidden>
+    <div class="modal-panel" role="dialog" aria-labelledby="ce-suits-title">
+      <h2 id="ce-suits-title">Crazy eight!</h2>
+      <p>Pick the suit everyone has to play next.</p>
+      <div class="ce-suit-row" id="ce-suit-row"></div>
+      <button class="btn ghost" id="ce-suits-cancel">Keep the eight</button>
+    </div>
+  </div>
+</section>
+
 <div class="modal leave-modal" id="leave-modal" hidden>
   <div class="modal-panel" role="dialog" aria-labelledby="leave-title">
     <h2 id="leave-title">Leave the table?</h2>
@@ -151,6 +183,7 @@
 <script src="table3d.js"></script>
 <script src="blackjack.js"></script>
 <script src="poker.js"></script>
+<script src="eights.js"></script>
 <script>Casino.start();</script>
 </body>
 </html>

@@ -392,6 +392,7 @@ function buildLobby() {
   });
   fan($('#art-blackjack'), [[14, 0, -12, -26], [13, 1, 10, 26]]);
   fan($('#art-poker'), [[10, 2, -24, -64], [11, 2, -12, -32], [12, 2, 0, 0], [13, 2, 12, 32], [14, 2, 24, 64]]);
+  fan($('#art-eights'), [[8, 0, -21, -54], [8, 1, -7, -18], [8, 2, 7, 18], [8, 3, 21, 54]]);
   const chip = (host, v, left, top) => {
     const c = chipEl(v);
     c.style.left = left;
@@ -404,8 +405,8 @@ function buildLobby() {
   chip($('#art-poker'), 1000, '84%', '62%');
   $('#refill-btn').addEventListener('click', () => { wallet.refill(); renderLobby(); });
   friends = ArcadeNet.panel({
-    hosts: [{ game: 'poker', label: 'Host Hold\'em' }, { game: 'blackjack', label: 'Host Blackjack' }],
-    games: ['poker', 'blackjack'],
+    hosts: [{ game: 'poker', label: 'Host Hold\'em' }, { game: 'blackjack', label: 'Host Blackjack' }, { game: 'eights', label: 'Host Crazy 8s' }],
+    games: ['poker', 'blackjack', 'eights'],
     max: 4,
     blurb: 'Up to 4 players at one table',
     onRoom: setRoom,

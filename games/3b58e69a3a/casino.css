@@ -631,6 +631,51 @@ kbd {
   .pk-hint b { font-size: 12px; }
   .pk-status { font-size: 13px; }
 }
+/* ---------- Crazy Eights ---------- */
+/* Your hand lives in the dock as real cards; the ones you can play lift and glow. */
+.ce-dock {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 6px 12px max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(5, 9, 7, 0), rgba(5, 9, 7, .85) 30%, rgba(5, 9, 7, .95));
+  --card-w: 70px;
+}
+.ce-status { min-height: 20px; color: var(--muted); font-size: 15px; font-weight: 500; text-align: center; }
+.ce-status b { color: var(--gold); }
+.ce-hand { position: relative; width: min(760px, 100%); height: calc(var(--card-w) * 1.4 + 22px); }
+.ce-hand .card { position: absolute; bottom: 0; transition: transform .2s, filter .2s, left .25s; }
+.ce-hand .card.playable { cursor: pointer; transform: translateY(-14px); filter: drop-shadow(0 0 10px rgba(245, 200, 76, .8)); }
+.ce-hand .card.playable:hover { transform: translateY(-22px); }
+.ce-hand .card.dim { filter: brightness(.55) saturate(.7); }
+.ce-hand .card.arrive { animation: ce-arrive .35s cubic-bezier(.2, .8, .2, 1.3); }
+@keyframes ce-arrive { from { transform: translateY(40px); opacity: 0; } }
+.ce-hand-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+.ce-buttons { display: flex; gap: 12px; justify-content: center; }
+.ce-buttons .btn { min-width: 132px; }
+/* The suit to follow, between the piles. An eight makes it pop. */
+.ce-suit {
+  position: absolute; width: max-content; translate: -50% -50%;
+  padding: 4px 14px; border-radius: 999px; white-space: nowrap;
+  font-weight: 800; font-size: 15px; color: #fff;
+  background: rgba(0, 0, 0, .55); border: 1px solid rgba(255, 255, 255, .25);
+}
+.ce-suit.red { color: #ff9aa2; }
+.ce-suit.pop { animation: badge-pop .45s cubic-bezier(.2, .8, .2, 1.6); border-color: var(--gold); box-shadow: 0 0 18px rgba(245, 200, 76, .55); }
+.ce-suit-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.ce-suit-row button {
+  height: 88px; border: 0; border-radius: 16px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font: 40px/1 Georgia, serif; color: #16181d; background: linear-gradient(155deg, #fff, #ebe6d8);
+  box-shadow: 0 4px 0 #b9b2a0; transition: transform .12s;
+}
+.ce-suit-row button:hover { transform: translateY(-3px); }
+.ce-suit-row button.red { color: #c61f2c; }
+.ce-suit-row small { font: 700 10px Rubik, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #4b4f58; }
+@media (max-width: 600px) {
+  .ce-dock { --card-w: 52px; gap: 8px; }
+  .ce-buttons .btn { min-width: 104px; height: 44px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lobby-bg { display: none; }
 }
