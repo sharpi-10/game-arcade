@@ -843,7 +843,7 @@ window.Arcade = {
   grant: (key) => { if (grant(key, { quiet: true })) emit(); },
   owns,
   item: findItem,
-  items: (s) => allItems().filter((i) => i.slot === s),
+  items: (s) => allItems().filter((i) => !s || i.slot === s), // every item when no slot is given
   open,
   close,
   isOpen: () => !!overlay && !overlay.hidden,
