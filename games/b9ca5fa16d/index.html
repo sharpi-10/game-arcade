@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Regatta Rush</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --panel: rgba(8, 24, 44, .86);
+    --line: rgba(255, 255, 255, .14);
+    --text: #fff;
+    --muted: #b4d3e8;
+    --accent: #3fe0d0;
+    --accent-ink: #032b2a;
+    --warn: #ffcc33;
+    --bad: #ff4d6d;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0b3a5c; color: var(--text);
+    font-family: Rubik, system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .shadow-text { text-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 14px rgba(0, 0, 0, .35); }
+  .hud-tl { position: absolute; top: 16px; left: 16px; font-family: Bungee, sans-serif; }
+  .dist { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .dist small { font-size: 16px; color: var(--accent); margin-left: 4px; }
+  .time { font-size: 20px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .speed-line { font-family: Rubik, sans-serif; font-weight: 700; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .hud-buttons { position: absolute; top: 112px; left: 16px; display: flex; gap: 8px; pointer-events: auto; }
+  .icon-btn {
+    width: 42px; height: 42px; border-radius: 12px; cursor: pointer;
+    background: rgba(8, 24, 44, .6); border: 1px solid var(--line);
+    color: #fff; font-size: 17px;
+  }
+  .pos {
+    position: absolute; right: 24px; top: 14px;
+    font-family: Bungee, sans-serif; font-size: 80px; line-height: 1;
+    color: var(--accent); text-shadow: 0 5px 0 #0b6b63, 0 0 20px rgba(0, 0, 0, .4);
+  }
+  .pos sup { font-size: 30px; vertical-align: top; margin-left: 2px; }
+  .progress {
+    position: absolute; right: 30px; top: 110px; bottom: 200px; width: 10px;
+    border-radius: 5px; background: rgba(8, 24, 44, .5); border: 1px solid var(--line);
+  }
+  .progress i {
+    position: absolute; left: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    border-radius: 50%; border: 2px solid rgba(0, 0, 0, .5);
+  }
+  .progress i.me { width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 3px solid #fff; z-index: 1; }
+  .progress::before {
+    content: '🏁'; position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-size: 18px;
+  }
+
+  .stroke {
+    position: absolute; left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    width: min(460px, calc(100% - 32px)); text-align: center;
+  }
+  .rating {
+    font-family: Bungee, sans-serif; font-size: 30px; line-height: 1; height: 34px; opacity: 0;
+    -webkit-text-stroke: 1.5px #062a45; text-shadow: 0 3px 0 #062a45;
+  }
+  .rating.show { animation: rate .7s ease-out forwards; }
+  .rating.perfect { color: var(--accent); text-shadow: 0 3px 0 #062a45, 0 0 18px rgba(63, 224, 208, .8); }
+  .rating.good { color: var(--warn); }
+  .rating.bad { color: var(--bad); }
+  @keyframes rate {
+    0% { opacity: 0; transform: translateY(8px) scale(.7); }
+    18% { opacity: 1; transform: translateY(0) scale(1.1); }
+    70% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-10px); }
+  }
+  .meter-wrap { position: relative; margin-top: 16px; }
+  .meter {
+    position: relative; height: 28px; border-radius: 14px; overflow: hidden;
+    background: rgba(8, 24, 44, .8); border: 2px solid rgba(255, 255, 255, .8);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  /* A gloss over the top half of the bar. */
+  .meter::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0));
+  }
+  .meter .zone { position: absolute; top: 0; bottom: 0; transition: left .22s ease-out, width .22s ease-out; }
+  .meter .crab { background: linear-gradient(180deg, rgba(255, 77, 109, .55), rgba(170, 30, 60, .55)); }
+  .meter .ok { background: linear-gradient(180deg, rgba(255, 214, 80, .6), rgba(200, 140, 20, .6)); }
+  .meter .sweet {
+    background: linear-gradient(180deg, #8ffff0, #22c3b8);
+    box-shadow: 0 0 14px rgba(63, 224, 208, .9), inset 0 0 0 2px rgba(255, 255, 255, .55);
+    animation: sweet 1s ease-in-out infinite alternate;
+  }
+  @keyframes sweet { to { filter: brightness(1.18); } }
+  .meter .needle {
+    position: absolute; top: 2px; bottom: 2px; left: 0; width: 8px; margin-left: -4px; z-index: 1;
+    border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px #062a45, 0 0 12px #fff;
+  }
+  .meter.drive .needle { background: var(--accent); box-shadow: 0 0 0 2px #062a45, 0 0 14px var(--accent); }
+  .meter.drift { border-color: var(--warn); }
+  .meter.hit { animation: hit .35s ease-out; }
+  .meter.miss { animation: miss .4s ease-out; }
+  @keyframes hit { 0% { box-shadow: 0 0 0 3px rgba(0, 0, 0, .3), 0 0 30px 8px rgba(63, 224, 208, .9); border-color: #b8fff4; } }
+  @keyframes miss {
+    0%, 100% { transform: none; }
+    20% { transform: translateX(-6px); border-color: var(--bad); }
+    50% { transform: translateX(5px); border-color: var(--bad); }
+    75% { transform: translateX(-3px); }
+  }
+  /* An arrow over the green zone, which jumps to a new spot after each stroke. */
+  .target {
+    position: absolute; top: -13px; width: 0; height: 0; margin-left: -7px;
+    border: 7px solid transparent; border-top: 9px solid var(--accent); border-bottom: 0;
+    filter: drop-shadow(0 2px 0 #062a45) drop-shadow(0 0 6px rgba(63, 224, 208, .8));
+    transition: left .22s ease-out;
+  }
+  .stroke-info {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--muted);
+  }
+  .combo { font-family: Bungee, sans-serif; font-weight: 400; font-size: 18px; color: #fff; }
+  .combo.hot { color: var(--accent); animation: hot .5s ease-in-out infinite alternate; }
+  @keyframes hot { to { text-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 16px var(--accent); transform: scale(1.08); } }
+  .stamina { flex: 1; max-width: 220px; display: flex; align-items: center; gap: 8px; }
+  .stamina .bar { flex: 1; height: 10px; border-radius: 5px; background: rgba(8, 24, 44, .7); overflow: hidden; border: 1px solid var(--line); }
+  .stamina .bar, .stamina .fill { display: block; }
+  .stamina .fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ffb13b, #ffe45c); transform-origin: left; }
+  .stamina.tired .fill { background: var(--bad); }
+  .stamina.sprinting .fill { background: linear-gradient(90deg, #ff7a3b, #ffd23f); box-shadow: 0 0 10px #ffb13b; }
+
+  .banner {
+    position: absolute; top: 30%; left: 0; right: 0; text-align: center;
+    font-family: Bungee, sans-serif; font-size: clamp(56px, 12vw, 140px); line-height: 1;
+    color: #fff; opacity: 0;
+    -webkit-text-stroke: 3px #062a45; text-shadow: 0 8px 0 #062a45;
+  }
+  .banner.small { font-size: clamp(36px, 7vw, 72px); }
+  .banner.gold { color: var(--warn); }
+  .banner.show { animation: pop 1.2s ease-out forwards; }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(.4); }
+    14% { opacity: 1; transform: scale(1.12); }
+    28% { transform: scale(1); }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.04); }
+  }
+
+  /* ---------- Menus ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; overflow: auto;
+    display: grid; place-items: center; padding: 64px 16px 24px;
+    background: radial-gradient(ellipse at center, rgba(6, 26, 44, .15), rgba(6, 26, 44, .65));
+  }
+  .panel {
+    width: min(540px, 100%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 24px;
+    padding: 28px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  }
+  .logo {
+    font-family: Bungee, sans-serif; font-weight: 400;
+    font-size: clamp(44px, 11vw, 68px); line-height: .95; margin: 0; text-align: center;
+    background: linear-gradient(180deg, #b8fff4, #22b8d6);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 0 #063a5a);
+  }
+  .panel h2 { font-family: Bungee, sans-serif; font-weight: 400; font-size: 36px; margin: 0; text-align: center; }
+  .sub { text-align: center; color: var(--muted); margin: 10px 0 8px; }
+  .field-label {
+    font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 20px 0 10px;
+  }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .swatch {
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .25);
+    transition: transform .12s;
+  }
+  .swatch[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); }
+  .swatch.locked { position: relative; opacity: .55; }
+  .swatch.locked::after { content: '🔒'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; }
+  .rower {
+    display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 18px; padding: 8px;
+    border-radius: 18px; border: 1px solid var(--line); background: rgba(255, 255, 255, .06);
+    color: #fff; font: inherit; text-align: left; cursor: pointer; transition: background .15s;
+  }
+  .rower:hover { background: rgba(255, 255, 255, .12); }
+  .rower-face { width: 58px; height: 58px; flex: none; border-radius: 50%; overflow: hidden; }
+  .rower-face svg { width: 100%; height: 100%; display: block; }
+  .rower-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .rower-text small { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .rower-text b { font: 400 18px Bungee, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #rower-tix { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--muted); }
+  .rower-edit { flex: none; padding: 10px 14px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; }
+  .seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, .07); }
+  .seg button {
+    flex: 1; padding: 10px; border: 0; border-radius: 10px; cursor: pointer;
+    background: transparent; color: #fff; font: 500 15px Rubik, sans-serif;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .seg button:disabled { cursor: default; opacity: .6; }
+  .btn-primary {
+    display: block; width: 100%; margin-top: 24px; padding: 16px; cursor: pointer;
+    border: 0; border-radius: 16px;
+    font: 400 24px Bungee, sans-serif; color: var(--accent-ink);
+    background: linear-gradient(180deg, #7ff5e8, #1fc2c9);
+    box-shadow: 0 6px 0 #0b6b73;
+  }
+  .btn-primary:active { transform: translateY(4px); box-shadow: 0 2px 0 #0b6b73; }
+  .btn-primary:disabled { opacity: .55; cursor: default; transform: none; box-shadow: 0 6px 0 #0b6b73; }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+  .btn {
+    flex: 1; display: block; text-align: center; text-decoration: none; cursor: pointer;
+    padding: 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .08); color: #fff; font: 500 15px Rubik, sans-serif;
+  }
+  .btn:hover { background: rgba(255, 255, 255, .14); }
+  .best-line { text-align: center; color: var(--muted); font-size: 14px; margin: 14px 0 0; min-height: 1em; }
+  .best-line strong { color: #fff; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: center;
+    font-size: 14px; color: var(--muted); margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+  }
+  .controls .keys { white-space: nowrap; }
+  kbd {
+    display: inline-block; min-width: 26px; padding: 2px 7px; text-align: center;
+    border-radius: 6px; background: rgba(255, 255, 255, .12); border-bottom: 2px solid rgba(255, 255, 255, .2);
+    color: #fff; font: 600 12px Rubik, sans-serif;
+  }
+  .tip { grid-column: 1 / -1; margin-top: 4px; color: var(--muted); font-size: 13px; }
+  .tip b { color: #fff; }
+  .back-link {
+    position: fixed; top: 16px; left: 16px; z-index: 11;
+    color: #fff; text-decoration: none; font-weight: 500;
+    background: rgba(8, 24, 44, .7); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 999px;
+  }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-variant-numeric: tabular-nums; }
+  .results-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  .results-table td:first-child { font-family: Bungee, sans-serif; width: 44px; }
+  .results-table td:last-child { text-align: right; color: var(--muted); }
+  .results-table tr.me { background: rgba(63, 224, 208, .16); }
+  .results-table tr.me td:last-child { color: #fff; }
+  .results-table .friend { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-left: 6px; }
+  .mp { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); --anet-accent: var(--accent); }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+
+  /* ---------- Touch controls ---------- */
+  #touch {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 16px max(16px, env(safe-area-inset-bottom));
+    pointer-events: none;
+  }
+  .tc {
+    pointer-events: auto; touch-action: none;
+    width: 84px; height: 84px; border-radius: 50%;
+    background: rgba(8, 24, 44, .55); border: 2px solid rgba(255, 255, 255, .55);
+    color: #fff; font: 400 14px Bungee, sans-serif;
+  }
+  .tc.big { width: 108px; height: 108px; font-size: 20px; }
+  .tc.active { background: rgba(63, 224, 208, .6); }
+
+  @media (pointer: coarse) {
+    .stroke { bottom: 150px; }
+    .progress { bottom: 330px; }
+  }
+  @media (max-width: 640px) {
+    .dist { font-size: 26px; }
+    .time { font-size: 16px; }
+    .hud-buttons { top: 92px; }
+    .pos { font-size: 56px; right: 16px; }
+    .pos sup { font-size: 22px; }
+    .progress { right: 22px; top: 86px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-tl shadow-text">
+    <div class="dist"><span id="dist">0</span><small>/ 500 m</small></div>
+    <div class="time" id="time">0:00.00</div>
+    <div class="speed-line" id="speed"></div>
+  </div>
+  <div class="hud-buttons">
+    <button class="icon-btn" id="pause-btn" aria-label="Pause">❚❚</button>
+    <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
+  </div>
+  <div class="pos shadow-text" id="pos">1<sup>st</sup></div>
+  <div class="progress" id="progress"></div>
+  <div class="stroke">
+    <div class="rating" id="rating"></div>
+    <div class="meter-wrap">
+      <div class="target" id="z-target"></div>
+      <div class="meter" id="meter">
+        <div class="zone crab" id="z-crab"></div>
+        <div class="zone ok" id="z-rushed"></div>
+        <div class="zone sweet" id="z-sweet"></div>
+        <div class="zone ok" id="z-late"></div>
+        <div class="needle" id="needle"></div>
+      </div>
+    </div>
+    <div class="stroke-info shadow-text">
+      <span class="combo" id="combo">×0</span>
+      <span class="stamina" id="stamina"><span>Sprint</span><span class="bar"><span class="fill" id="stamina-fill"></span></span></span>
+    </div>
+  </div>
+  <div class="banner" id="banner"></div>
+</div>
+
+<a class="back-link" id="back-link" href="../../index.html">← Arcade</a>
+
+<div class="overlay" id="menu">
+  <div class="panel">
+    <h1 class="logo">REGATTA<br>RUSH</h1>
+    <p class="sub" id="menu-sub">500 m · 6 boats · row in rhythm</p>
+    <button class="rower" id="rower-btn" type="button" aria-label="Your character, tickets, quests and prizes">
+      <span class="rower-face" id="rower-face"></span>
+      <span class="rower-text"><small>Rower</small><b id="rower-name"></b><span id="rower-tix"></span></span>
+      <span class="rower-edit">Customize</span>
+    </button>
+    <div class="field-label">Your boat</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="field-label">Difficulty</div>
+    <div class="seg" id="difficulty">
+      <button data-d="easy">Easy</button>
+      <button data-d="normal">Normal</button>
+      <button data-d="hard">Hard</button>
+    </div>
+    <button class="btn-primary" id="start-btn">Start race</button>
+    <p class="best-line" id="mp-note" hidden></p>
+    <p class="best-line" id="best-line"></p>
+    <div class="mp" id="mp"></div>
+    <div class="controls">
+      <span class="keys"><kbd>Space</kbd> <kbd>↑</kbd> <kbd>W</kbd></span><span>Pull a stroke</span>
+      <span class="keys"><kbd>Shift</kbd> <kbd>S</kbd></span><span>Hold while pulling to sprint</span>
+      <span class="keys"><kbd>Esc</kbd></span><span>Pause</span>
+      <span class="tip">Pull when the needle reaches the <b>green</b> zone. It jumps somewhere new after every stroke, so keep your eye on it. Perfect strokes build a combo: the rhythm gets faster and the boat flies. Pull too soon and you <b>catch a crab</b> and lose speed. Sprint strokes are stronger but tire you out, so save some for the finish.</span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause" hidden>
+  <div class="panel">
+    <h2 id="pause-title">Paused</h2>
+    <p class="sub" id="pause-note" hidden></p>
+    <button class="btn-primary" id="resume-btn">Resume</button>
+    <div class="btn-row">
+      <button class="btn" id="restart-btn">Restart race</button>
+      <button class="btn" id="menu-btn">Main menu</button>
+    </div>
+    <div class="btn-row"><a class="btn" href="../../index.html">Back to arcade</a></div>
+  </div>
+</div>
+
+<div class="overlay" id="results" hidden>
+  <div class="panel">
+    <h2 id="results-title">Finished!</h2>
+    <p class="sub" id="results-sub"></p>
+    <table class="results-table"><tbody id="results-body"></tbody></table>
+    <button class="btn-primary" id="again-btn">Race again</button>
+    <p class="best-line" id="results-wait" hidden>Waiting for the host to start the next race…</p>
+    <div class="btn-row">
+      <button class="btn" id="results-menu-btn">Change boat</button>
+      <a class="btn" href="../../index.html">Back to arcade</a>
+    </div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <button class="tc" data-touch="sprint">Sprint</button>
+  <button class="tc big" data-touch="row">Row</button>
+</div>
+
+<script src="../../shared/arcade.js"></script>
+<script src="../../shared/net.js"></script>
+<script src="rewards.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
