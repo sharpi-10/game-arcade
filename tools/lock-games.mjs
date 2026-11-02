@@ -1,12 +1,12 @@
-// Locks every game's card (title, picture, link) with its unlock code and writes the result
-// into index.html. The page then holds only encrypted data: no codes, names or links can be
-// read from it, and a card only opens with its code.
+// Writes every game's card (title, picture, link) into index.html. A game with no code is open
+// and its card is written as it is. A game with a code is locked: its card is encrypted with the
+// code, so its name and link can't be read from the page, and the card only opens with the code.
 //
 // The list of games and their codes lives outside this public repository. Run from the
 // game-arcade folder:
 //   node tools/lock-games.mjs ../arcade-private/games.json
 //
-// games.json: { "games": [ { "code": "...", "card": { title, tag, description, href,
+// games.json: { "games": [ { "code"?: "...", "card": { title, tag, description, href,
 //   artFile (an SVG next to games.json), stats: [{ label, key, format: "time" | "money",
 //   fallback? }], empty? } } ] }
 import { readFile, writeFile } from 'node:fs/promises';
@@ -41,13 +41,19 @@ if (!listPath) {
 const { games } = JSON.parse(await readFile(listPath, 'utf8'));
 const salt = crypto.getRandomValues(new Uint8Array(16));
 const keys = new Map();
+const open = [];
 const boxes = [];
 for (const { code, card } of games) {
+  const { artFile, ...rest } = card;
+  const payload = { ...rest, art: artFile ? await readFile(resolve(dirname(listPath), artFile), 'utf8') : '' };
+  if (!code) {
+    // Escape '<' so nothing in a card can close the page's <script>.
+    open.push(`  ${JSON.stringify(payload).replace(/</g, '\\u003c')},`);
+    continue;
+  }
   const norm = normalize(code);
   if (norm.length < 6) throw new Error(`The code for "${card.title}" needs at least 6 letters or digits.`);
   if (!keys.has(norm)) keys.set(norm, await keyFor(norm, salt));
-  const { artFile, ...rest } = card;
-  const payload = { ...rest, art: artFile ? await readFile(resolve(dirname(listPath), artFile), 'utf8') : '' };
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, keys.get(norm), new TextEncoder().encode(JSON.stringify(payload)));
   boxes.push(`  { iv: '${b64(iv)}', data: '${b64(new Uint8Array(data))}' },`);
@@ -60,6 +66,9 @@ if (from < 0 || to < from) throw new Error(`index.html is missing the ${START} â
 const indent = page.slice(page.lastIndexOf('\n', from) + 1, from);
 const block = [
   START,
+  'const OPEN = [',
+  ...open,
+  '];',
   `const SALT = '${b64(salt)}';`,
   `const ITERATIONS = ${ITERATIONS};`,
   'const LOCKED = [',
@@ -68,4 +77,5 @@ const block = [
   '',
 ].join(`\n${indent}`);
 await writeFile(PAGE, page.slice(0, from) + block + page.slice(to));
-console.log(`Locked ${boxes.length} game${boxes.length === 1 ? '' : 's'} into index.html.`);
+const plural = (n) => `${n} game${n === 1 ? '' : 's'}`;
+console.log(`Wrote ${plural(open.length)} open and ${plural(boxes.length)} locked into index.html.`);

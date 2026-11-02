@@ -288,6 +288,11 @@ const confetti = (() => {
 const games = {};
 let current = null;
 
+// Blackjack and poker open with the casino's code on the home page; Crazy Eights is free to all.
+const CODE_TABLES = ['blackjack', 'poker'];
+const tablesOpen = Arcade.unlocked('games/3b58e69a3a/');
+const playable = (name) => !!games[name] && (tablesOpen || !CODE_TABLES.includes(name));
+
 let leaveConfirmed = false;
 let leaveTarget = 'lobby';
 
@@ -298,7 +303,7 @@ function go(name) { location.hash = name === 'lobby' ? '' : name; }
 // Browser confirm() dialogs are blocked in some viewers, so the warning is an in-page modal.
 function route() {
   const name = location.hash.replace('#', '');
-  const target = games[name] ? name : 'lobby';
+  const target = playable(name) ? name : 'lobby';
   if (target === current) return;
   if (current && current !== 'lobby') {
     const force = leaveConfirmed;
@@ -367,7 +372,16 @@ function setRoom(r) {
 }
 
 function renderLobby() {
-  $('#refill').hidden = wallet.balance >= 100;
+  $('#refill').hidden = !tablesOpen || wallet.balance >= 100;
+}
+
+// Without the code the lobby only shows Crazy Eights, and chips (only used at the locked
+// tables) stay out of sight.
+function hideLockedTables() {
+  if (tablesOpen) return;
+  for (const name of CODE_TABLES) $(`.game-card[href="#${name}"]`).remove();
+  $('#balance').hidden = true;
+  $('.lobby-sub').textContent = 'Free to play. Win arcade tickets for every round you take.';
 }
 
 function buildLobby() {
@@ -404,9 +418,11 @@ function buildLobby() {
   chip($('#art-poker'), 500, '8%', '18%');
   chip($('#art-poker'), 1000, '84%', '62%');
   $('#refill-btn').addEventListener('click', () => { wallet.refill(); renderLobby(); });
+  const hosts = [{ game: 'poker', label: 'Host Hold\'em' }, { game: 'blackjack', label: 'Host Blackjack' }, { game: 'eights', label: 'Host Crazy 8s' }]
+    .filter((h) => tablesOpen || !CODE_TABLES.includes(h.game));
   friends = ArcadeNet.panel({
-    hosts: [{ game: 'poker', label: 'Host Hold\'em' }, { game: 'blackjack', label: 'Host Blackjack' }, { game: 'eights', label: 'Host Crazy 8s' }],
-    games: ['poker', 'blackjack', 'eights'],
+    hosts,
+    games: hosts.map((h) => h.game),
     max: 4,
     blurb: 'Up to 4 players at one table',
     onRoom: setRoom,
@@ -426,6 +442,7 @@ function start() {
   sound.setMuted(sound.muted);
   $('#mute-btn').addEventListener('click', () => sound.setMuted(!sound.muted));
   buildLobby();
+  hideLockedTables();
   window.addEventListener('hashchange', route);
   route();
 }

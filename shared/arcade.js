@@ -412,6 +412,12 @@ function register(def) {
   emit();
 }
 
+// ---------- Codes ----------
+// Some games keep part of themselves behind a code. The home page records the folder of every
+// game a code has opened in this browser ('games/abc/'), and a game checks its own folder.
+const UNLOCKED_KEY = 'arcade.unlocked';
+const unlockedDirs = () => store.get(UNLOCKED_KEY, []) || [];
+
 // ---------- Sound ----------
 let audio = null;
 function sound(kind) {
@@ -843,5 +849,7 @@ window.Arcade = {
   isOpen: () => !!overlay && !overlay.hidden,
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   toast,
+  unlocked: (dir) => unlockedDirs().includes(dir),
+  setUnlocked: (dirs) => store.set(UNLOCKED_KEY, [...dirs]),
 };
 })();
