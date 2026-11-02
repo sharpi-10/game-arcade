@@ -22,30 +22,25 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const chips = () => Math.max(0, Math.round(Number(read(CHIPS_KEY, START_CHIPS)) || 0));
 
 const CSS = `
-  .cp { width: min(520px, calc(100% - 32px)); max-height: calc(100% - 32px); margin: auto; padding: 22px; border-radius: 24px;
-    color: var(--text); background: linear-gradient(180deg, var(--panel), var(--panel-lo));
-    border: 1px solid rgba(255, 95, 168, .5); box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 40px rgba(255, 95, 168, .2); }
-  .cp[open] { animation: pop-in .25s cubic-bezier(.2, .8, .2, 1.2); }
-  .cp::backdrop { background: rgba(5, 6, 20, .7); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-  .cp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-  .cp-head h2 { margin: 0; font: 400 18px Bungee, Rubik, sans-serif; letter-spacing: .1em; color: var(--pink); text-shadow: 0 0 14px rgba(255, 95, 168, .5); }
-  .cp-note { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
-  .cp section { padding: 14px 0; border-top: 1px solid var(--line); }
+  .cp { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); margin: auto; padding: 20px; border-radius: 16px;
+    font: 15px/1.4 var(--ui-font); color: var(--ui-text); background: var(--ui-surface);
+    border: 1px solid var(--ui-line); box-shadow: var(--ui-shadow); }
+  .cp::backdrop { background: rgba(24, 24, 27, .3); }
+  .cp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
+  .cp-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .cp-note { margin: 0 0 4px; color: var(--ui-muted); font-size: 13px; }
+  .cp section { padding: 14px 0; border-top: 1px solid var(--ui-line); }
   .cp section:first-of-type { border-top: 0; }
-  .cp h3 { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-  .cp-stat { float: right; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0; text-transform: none; font-size: 14px; }
+  .cp h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--ui-muted); }
+  .cp-stat { float: right; font-weight: 600; color: var(--ui-text); font-variant-numeric: tabular-nums; }
   .cp-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .cp-row + .cp-row { margin-top: 8px; }
-  .cp input { flex: 1 1 120px; min-width: 0; height: 40px; padding: 0 14px; border-radius: 12px;
-    border: 1px solid var(--line); background: rgba(0, 0, 0, .25); color: var(--text); font: 600 15px Rubik, sans-serif; }
-  .cp input:focus { outline: none; border-color: var(--cyan); }
-  .cp button.act { height: 40px; padding: 0 16px; border-radius: 12px; cursor: pointer; font: 600 14px Rubik, sans-serif;
-    color: var(--text); background: rgba(255, 255, 255, .08); border: 1px solid var(--line); transition: background .15s, border-color .15s; }
-  .cp button.act:hover, .cp button.act:focus-visible { outline: none; background: rgba(255, 255, 255, .14); border-color: var(--cyan); }
-  .cp button.go { color: var(--bg); border: 0; background: linear-gradient(90deg, var(--cyan), var(--violet)); }
-  .cp button.danger { color: var(--bad); border-color: rgba(255, 107, 139, .45); }
-  .cp button.danger.armed { color: var(--bg); background: var(--bad); border-color: var(--bad); }
-  .cp-msg { min-height: 18px; margin: 4px 0 0; font-size: 14px; font-weight: 600; color: var(--good); text-align: center; }
+  .cp input { flex: 1 1 120px; min-width: 0; height: 40px; padding: 0 12px; border-radius: 10px;
+    border: 1px solid var(--ui-line); background: var(--ui-surface); color: var(--ui-text); font: 500 15px var(--ui-font); }
+  .cp input:focus { outline: none; border-color: var(--ui-accent); }
+  .cp .ui-btn.danger { color: var(--ui-bad); }
+  .cp .ui-btn.danger.armed { color: #fff; background: var(--ui-bad); border-color: var(--ui-bad); }
+  .cp-msg { min-height: 18px; margin: 4px 0 0; font-size: 14px; color: var(--ui-good); text-align: center; }
 `;
 
 let dialog = null;
@@ -130,17 +125,17 @@ function build() {
     <p class="cp-note">Changes only this browser's saved games.</p>
     <section>
       <h3>Character <span class="cp-stat" data-stat="tickets"></span></h3>
-      <div class="cp-row"><input name="tickets" type="number" min="1" step="1" value="500" aria-label="Tickets to give"><button class="act go" data-do="tickets">Give tickets</button></div>
-      <div class="cp-row"><button class="act" data-do="prizes">Unlock every prize</button><button class="act danger" data-do="character">Reset character</button></div>
+      <div class="cp-row"><input name="tickets" type="number" min="1" step="1" value="500" aria-label="Tickets to give"><button class="ui-btn primary" data-do="tickets">Give tickets</button></div>
+      <div class="cp-row"><button class="ui-btn" data-do="prizes">Unlock every prize</button><button class="ui-btn danger" data-do="character">Reset character</button></div>
     </section>
     <section>
       <h3>Casino chips <span class="cp-stat" data-stat="chips"></span></h3>
-      <div class="cp-row"><input name="chips" type="number" min="1" step="1" value="1000" aria-label="Chips to give"><button class="act go" data-do="chips">Give chips</button></div>
+      <div class="cp-row"><input name="chips" type="number" min="1" step="1" value="1000" aria-label="Chips to give"><button class="ui-btn primary" data-do="chips">Give chips</button></div>
     </section>
     <section>
       <h3>Saves</h3>
-      <div class="cp-row"><button class="act danger" data-do="times">Reset best times</button><button class="act danger" data-do="relock">Forget entered codes</button></div>
-      <div class="cp-row"><button class="act danger" data-do="everything">Reset everything</button></div>
+      <div class="cp-row"><button class="ui-btn danger" data-do="times">Reset best times</button><button class="ui-btn danger" data-do="relock">Forget entered codes</button></div>
+      <div class="cp-row"><button class="ui-btn danger" data-do="everything">Reset everything</button></div>
     </section>
     <p class="cp-msg" role="status" aria-live="polite"></p>`;
   document.body.append(dialog);
