@@ -9,6 +9,8 @@
 // games.json: { "games": [ { "code"?: "...", "card": { title, tag, description, href,
 //   artFile (an SVG next to games.json), stats: [{ label, key, format: "time" | "money",
 //   fallback? }], empty? } } ] }
+// An entry can hold { "code": "...", "tool": "path/to/tool.js" } instead of a card: the code then
+// loads and opens that script (the owner's control panel) rather than showing a game.
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { webcrypto as crypto } from 'node:crypto';
@@ -43,16 +45,17 @@ const salt = crypto.getRandomValues(new Uint8Array(16));
 const keys = new Map();
 const open = [];
 const boxes = [];
-for (const { code, card } of games) {
-  const { artFile, ...rest } = card;
-  const payload = { ...rest, art: artFile ? await readFile(resolve(dirname(listPath), artFile), 'utf8') : '' };
+for (const { code, card, tool } of games) {
+  if (tool && !code) throw new Error(`The tool "${tool}" needs a code.`);
+  const { artFile, ...rest } = card || {};
+  const payload = tool ? { tool } : { ...rest, art: artFile ? await readFile(resolve(dirname(listPath), artFile), 'utf8') : '' };
   if (!code) {
     // Escape '<' so nothing in a card can close the page's <script>.
     open.push(`  ${JSON.stringify(payload).replace(/</g, '\\u003c')},`);
     continue;
   }
   const norm = normalize(code);
-  if (norm.length < 6) throw new Error(`The code for "${card.title}" needs at least 6 letters or digits.`);
+  if (norm.length < 6) throw new Error(`The code for "${tool || card.title}" needs at least 6 letters or digits.`);
   if (!keys.has(norm)) keys.set(norm, await keyFor(norm, salt));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, keys.get(norm), new TextEncoder().encode(JSON.stringify(payload)));
