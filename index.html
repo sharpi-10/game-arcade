@@ -4,252 +4,112 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Game Arcade</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/ui.css">
 <style>
-  :root {
-    --bg: #0a0b1e;
-    --panel: #161a3a;
-    --panel-lo: #0e1029;
-    --cyan: #45d4ff;
-    --violet: #9b6bff;
-    --pink: #ff5fa8;
-    --text: #eef0ff;
-    --muted: #a3a9cf;
-    --line: rgba(255, 255, 255, .1);
-    --good: #4ade80;
-    --bad: #ff6b8b;
-    color-scheme: dark;
-  }
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    min-height: 100vh;
-    min-height: 100dvh;
-    color: var(--text);
-    font-family: Rubik, system-ui, sans-serif;
-    background:
-      radial-gradient(800px 500px at 10% -10%, rgba(155, 107, 255, .3), transparent 60%),
-      radial-gradient(700px 500px at 100% 15%, rgba(69, 212, 255, .14), transparent 60%),
-      radial-gradient(1000px 520px at 50% 115%, rgba(255, 95, 168, .2), transparent 60%),
-      var(--bg);
-    background-attachment: fixed;
+    margin: 0; min-height: 100vh; min-height: 100dvh;
+    font: 15px/1.45 var(--ui-font); color: var(--ui-text); background: var(--ui-bg);
   }
-
-  /* ---------- Neon grid floor and drifting controller shapes ---------- */
-  .floor {
-    position: fixed; left: -50%; right: -50%; bottom: 0; height: 70vh; z-index: 0; pointer-events: none;
-    background-image:
-      linear-gradient(rgba(155, 107, 255, .5) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(155, 107, 255, .5) 1px, transparent 1px);
-    background-size: 64px 64px;
-    transform: perspective(600px) rotateX(42deg);
-    transform-origin: 50% 100%;
-    -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 75%);
-    mask-image: linear-gradient(to top, #000 10%, transparent 75%);
-    animation: floor-run 2.4s linear infinite;
+  /* ---------- Top: your character ---------- */
+  .top {
+    max-width: 1040px; margin: 0 auto; display: flex; justify-content: flex-end;
+    padding: max(16px, env(safe-area-inset-top)) 16px 0;
   }
-  @keyframes floor-run { to { background-position: 0 64px; } }
-  .shapes { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-  .shapes svg {
-    position: absolute; bottom: -80px; fill: none; stroke: currentColor; stroke-width: 2.5;
-    opacity: .18; animation: drift linear infinite;
-  }
-  @keyframes drift {
-    from { transform: translateY(0) rotate(0); }
-    to { transform: translateY(-115vh) rotate(360deg); }
-  }
-
-  /* ---------- Games ---------- */
-  main {
-    position: relative; z-index: 1; max-width: 1040px; margin: 0 auto;
-    padding: calc(96px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));
-  }
-
-  /* ---------- Your character, top left ---------- */
   .me-chip {
-    position: fixed; z-index: 6; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
-    display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 18px 0 5px; border-radius: 999px; cursor: pointer;
-    color: var(--text); font: inherit; text-align: left;
-    background: rgba(22, 26, 58, .85); border: 1px solid rgba(155, 107, 255, .5);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .4); backdrop-filter: blur(8px);
-    transition: border-color .2s, box-shadow .2s, transform .2s;
+    display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px 0 4px; border-radius: 22px; cursor: pointer;
+    font: inherit; color: var(--ui-text); text-align: left;
+    background: var(--ui-surface); border: 1px solid var(--ui-line);
   }
-  .me-chip:hover, .me-chip:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 0 24px rgba(69, 212, 255, .35); transform: translateY(-1px); }
-  .me-face { width: 46px; height: 46px; flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--me, var(--cyan)); }
+  .me-chip:hover { background: var(--ui-sunken); }
+  .me-face { width: 36px; height: 36px; flex: none; border-radius: 50%; overflow: hidden; background: var(--ui-sunken); }
   .me-face svg { width: 100%; height: 100%; display: block; }
-  .me-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .me-text b { font: 400 14px Bungee, Rubik, sans-serif; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
-  .me-text span { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .section-title {
-    display: flex; align-items: center; gap: 16px; margin: 0 0 24px;
-    font-family: Bungee, Rubik, sans-serif; font-size: 16px; letter-spacing: .14em;
-    color: var(--cyan); text-shadow: 0 0 14px rgba(69, 212, 255, .6); white-space: nowrap;
-  }
-  .section-title::before, .section-title::after {
-    content: ''; flex: 1; height: 2px; border-radius: 1px;
-    background: linear-gradient(90deg, transparent, var(--violet));
-  }
-  .section-title::after { background: linear-gradient(90deg, var(--violet), transparent); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 24px; }
-
+  .me-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+  .me-text b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .me-text span { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ui-muted); font-variant-numeric: tabular-nums; }
+  /* ---------- Games ---------- */
+  main { max-width: 1040px; margin: 0 auto; padding: 16px 16px calc(72px + env(safe-area-inset-bottom)); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
   .card {
-    display: flex; flex-direction: column; overflow: hidden;
-    border-radius: 20px; color: inherit; text-decoration: none;
-    background: linear-gradient(180deg, var(--panel), var(--panel-lo));
-    border: 1px solid rgba(155, 107, 255, .3);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
-    transition: transform .25s cubic-bezier(.2, .8, .2, 1.2), box-shadow .25s, border-color .25s;
+    display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
+    color: inherit; text-decoration: none; background: var(--ui-surface); border: 1px solid var(--ui-line);
+    transition: border-color .15s, box-shadow .15s;
   }
-  .card:hover, .card:focus-visible {
-    transform: translateY(-6px); outline: none; border-color: var(--cyan);
-    box-shadow: 0 26px 60px rgba(0, 0, 0, .55), 0 0 0 1px var(--cyan), 0 0 40px rgba(69, 212, 255, .35);
-  }
-  .card.fresh { animation: card-in .8s cubic-bezier(.2, .8, .2, 1.2), card-glow 2.4s ease-out; }
-  @keyframes card-in { from { opacity: 0; transform: translateY(40px) scale(.9); } }
-  @keyframes card-glow {
-    0%, 40% { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan), 0 0 60px rgba(155, 107, 255, .6); }
-  }
-  .thumb { aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--line); }
-  .thumb svg { width: 100%; height: 100%; display: block; transition: transform .4s cubic-bezier(.2, .8, .2, 1); }
-  .card:hover .thumb svg { transform: scale(1.04); }
-  .card-body { display: flex; flex-direction: column; flex: 1; padding: 18px 22px 22px; }
-  .tag {
-    align-self: flex-start; height: 24px; display: inline-flex; align-items: center;
-    padding: 0 10px; border-radius: 999px;
-    font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--cyan); border: 1px solid rgba(69, 212, 255, .4); background: rgba(69, 212, 255, .08);
-  }
-  .card h2 {
-    font-family: Bungee, Rubik, sans-serif; font-weight: 400; font-size: 21px; margin: 12px 0 6px; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .card p { color: var(--muted); margin: 0 0 18px; line-height: 1.5; flex: 1; }
-  .meta {
-    display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    padding-top: 16px; border-top: 1px solid var(--line);
-  }
-  .best { font-size: 14px; color: var(--muted); }
-  .best strong { color: var(--text); font-variant-numeric: tabular-nums; }
-  .play {
-    height: 36px; display: inline-flex; align-items: center; padding: 0 20px; border-radius: 999px;
-    font-family: Bungee, Rubik, sans-serif; font-size: 13px; letter-spacing: .06em;
-    color: var(--bg); background: linear-gradient(90deg, var(--cyan), var(--violet));
-    box-shadow: 0 0 18px rgba(155, 107, 255, .4);
-  }
-
+  .card:hover { border-color: var(--ui-line-strong); box-shadow: var(--ui-shadow); }
+  .card.fresh { animation: card-in .5s ease-out; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(12px); } }
+  .thumb { aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--ui-line); }
+  .thumb svg { width: 100%; height: 100%; display: block; }
+  .card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; padding: 14px 16px 16px; }
+  .card h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .card p { flex: 1; margin: 0; font-size: 14px; color: var(--ui-muted); }
+  .best { margin-top: 10px; font-size: 13px; color: var(--ui-muted); }
+  .best strong { font-weight: 600; color: var(--ui-text); font-variant-numeric: tabular-nums; }
   /* ---------- Code button, tucked in the corner ---------- */
   .code-btn {
     position: fixed; z-index: 5; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
-    width: 40px; height: 40px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-    color: var(--muted); background: rgba(22, 26, 58, .55); border: 1px solid var(--line);
-    opacity: .4; transition: opacity .2s, color .2s, border-color .2s, box-shadow .2s, transform .2s;
+    width: 36px; height: 36px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    color: var(--ui-muted); background: var(--ui-surface); border: 1px solid var(--ui-line);
+    opacity: .5; transition: opacity .15s;
   }
-  .code-btn:hover, .code-btn:focus-visible {
-    opacity: 1; outline: none; color: var(--cyan); border-color: var(--cyan);
-    box-shadow: 0 0 18px rgba(69, 212, 255, .35); transform: rotate(-12deg);
-  }
-  .code-btn svg { width: 18px; height: 18px; }
+  .code-btn:hover, .code-btn:focus-visible { opacity: 1; }
+  .code-btn svg { width: 16px; height: 16px; }
   /* ---------- Code popup ---------- */
   .code-pop {
-    width: min(480px, calc(100% - 32px)); margin: auto; padding: 22px 22px 16px; border-radius: 24px;
-    color: var(--text); background: linear-gradient(180deg, var(--panel), var(--panel-lo));
-    border: 1px solid rgba(155, 107, 255, .45);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 40px rgba(155, 107, 255, .2);
+    width: min(420px, calc(100% - 32px)); margin: auto; padding: 20px; border-radius: 16px;
+    color: var(--ui-text); background: var(--ui-surface); border: 1px solid var(--ui-line); box-shadow: var(--ui-shadow);
   }
-  .code-pop[open] { animation: pop-in .25s cubic-bezier(.2, .8, .2, 1.2); }
-  @keyframes pop-in { from { opacity: 0; transform: translateY(16px) scale(.96); } }
-  .code-pop::backdrop { background: rgba(5, 6, 20, .65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-  .code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-  .code-head h2 {
-    margin: 0; font: 400 18px Bungee, Rubik, sans-serif; letter-spacing: .1em;
-    color: var(--cyan); text-shadow: 0 0 14px rgba(69, 212, 255, .5);
-  }
+  .code-pop::backdrop { background: rgba(24, 24, 27, .3); }
+  .code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .code-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
   .code-close {
-    width: 34px; height: 34px; flex: none; border-radius: 50%; cursor: pointer;
-    border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: var(--muted); font-size: 20px; line-height: 1;
+    width: 32px; height: 32px; flex: none; padding: 0; border-radius: 8px; cursor: pointer;
+    font-size: 18px; line-height: 1; color: var(--ui-muted); background: none; border: 1px solid transparent;
   }
-  .code-close:hover, .code-close:focus-visible { color: var(--text); border-color: var(--cyan); outline: none; }
-  .code-msg { min-height: 20px; margin: 12px 0 0; font-weight: 600; font-size: 15px; text-align: center; }
-  .code-msg.ok { color: var(--cyan); }
-  .code-msg.bad { color: var(--bad); }
-  .code-box {
-    cursor: text;
-    width: 100%; height: 64px; display: flex; align-items: center; gap: 12px;
-    padding: 0 8px 0 20px; border-radius: 999px;
-    background: rgba(22, 26, 58, .88);
-    border: 1px solid rgba(155, 107, 255, .5);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
-    backdrop-filter: blur(8px);
-    transition: border-color .2s, box-shadow .2s;
-  }
-  .code-box:focus-within { border-color: var(--cyan); box-shadow: 0 16px 40px rgba(0, 0, 0, .55), 0 0 0 4px rgba(69, 212, 255, .16), 0 0 30px rgba(69, 212, 255, .25); }
-  .code-box.wrong { border-color: var(--bad); animation: shake .45s; }
-  .code-box.right { border-color: var(--good); box-shadow: 0 0 0 4px rgba(74, 222, 128, .2), 0 0 34px rgba(74, 222, 128, .4); }
-  @keyframes shake {
-    20%, 60% { transform: translateX(-8px); }
-    40%, 80% { transform: translateX(8px); }
-  }
-  .code-box svg { width: 20px; height: 20px; flex: none; color: var(--cyan); }
+  .code-close:hover { color: var(--ui-text); background: var(--ui-sunken); }
+  .code-box { display: flex; gap: 8px; }
   .code-box input {
-    flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none;
-    color: var(--text); font: 400 18px Bungee, Rubik, sans-serif; letter-spacing: .12em; text-transform: uppercase;
+    flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 10px; outline: none;
+    font: 500 16px var(--ui-font); letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text);
+    background: var(--ui-surface); border: 1px solid var(--ui-line);
   }
-  .code-box input::placeholder { color: var(--muted); font: 500 17px Rubik, system-ui, sans-serif; letter-spacing: .02em; text-transform: none; opacity: .85; }
-  .unlock {
-    height: 48px; padding: 0 22px; border: 0; border-radius: 999px; cursor: pointer; flex: none;
-    font: 400 14px Bungee, Rubik, sans-serif; letter-spacing: .06em;
-    color: var(--bg); background: linear-gradient(90deg, var(--cyan), var(--violet));
-    box-shadow: 0 0 20px rgba(155, 107, 255, .45);
-    transition: transform .12s, filter .12s, opacity .2s;
-  }
-  .unlock:hover { filter: brightness(1.1); }
-  .unlock:active { transform: translateY(2px); }
-  .unlock:disabled { opacity: .6; cursor: progress; }
-
-  @media (max-width: 520px) {
-    .code-box { height: 58px; padding-left: 16px; gap: 10px; }
-    .code-box input { font-size: 16px; letter-spacing: .08em; }
-    .code-box input::placeholder { font-size: 16px; }
-    .unlock { height: 44px; padding: 0 16px; }
-  }
+  .code-box input::placeholder { letter-spacing: 0; text-transform: none; color: var(--ui-muted); }
+  .code-box input:focus { border-color: var(--ui-accent); }
+  .code-box.wrong input { border-color: var(--ui-bad); animation: shake .35s; }
+  .code-box.right input { border-color: var(--ui-good); }
+  @keyframes shake { 25%, 75% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+  .code-msg { min-height: 20px; margin: 10px 0 0; font-size: 14px; }
+  .code-msg.ok { color: var(--ui-good); }
+  .code-msg.bad { color: var(--ui-bad); }
   @media (prefers-reduced-motion: reduce) {
-    .shapes { display: none; }
-    .floor, .card.fresh, .code-box.wrong, .code-pop[open] { animation: none; }
+    .card.fresh, .code-box.wrong input { animation: none; }
   }
 </style>
 </head>
 <body>
-<div class="floor" aria-hidden="true"></div>
-<div class="shapes" id="shapes" aria-hidden="true"></div>
-
-<button class="me-chip" id="me-chip" type="button" aria-label="Your character, tickets, quests and prizes">
-  <span class="me-face" id="me-face"></span>
-  <span class="me-text"><b id="me-name"></b><span id="me-tix"></span></span>
-</button>
-
+<header class="top">
+  <button class="me-chip" id="me-chip" type="button" aria-label="Your character, tickets, quests and prizes">
+    <span class="me-face" id="me-face"></span>
+    <span class="me-text"><b id="me-name"></b><span id="me-tix"></span></span>
+  </button>
+</header>
 <main>
-  <div class="section-title">Games</div>
   <div class="grid" id="games"></div>
 </main>
-
 <button class="code-btn" id="code-btn" type="button" aria-label="Enter a code" title="Got a code?">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 19 4M15.5 7.5l3 3M13.5 9.5l2 2"/></svg>
 </button>
 <dialog class="code-pop" id="code-pop" aria-labelledby="code-title">
 <form id="code-form" autocomplete="off">
   <div class="code-head"><h2 id="code-title">Got a code?</h2><button class="code-close" id="code-close" type="button" aria-label="Close">×</button></div>
-  <label class="code-box" id="code-box">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+  <div class="code-box" id="code-box">
     <input id="code" type="text" placeholder="Enter a code" aria-label="Game code" maxlength="40"
       autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
-    <button class="unlock" id="unlock" type="submit">Unlock</button>
-  </label>
+    <button class="ui-btn primary" id="unlock" type="submit">Unlock</button>
+  </div>
   <p class="code-msg" id="code-msg" role="status" aria-live="polite"></p>
 </form>
 </dialog>
-
 <script src="shared/arcade.js"></script>
 <script>
   // Open games are listed as they are. A locked game's card (name, picture, link) is encrypted
@@ -342,12 +202,10 @@
     a.innerHTML = `
       <div class="thumb">${card.art}</div>
       <div class="card-body">
-        <span class="tag"></span>
         <h2></h2>
         <p></p>
-        <div class="meta"><span class="best"></span><span class="play">Play</span></div>
+        <span class="best"></span>
       </div>`;
-    a.querySelector('.tag').textContent = card.tag;
     a.querySelector('h2').textContent = card.title;
     a.querySelector('p').textContent = card.description;
     a.querySelector('.best').append(...statLine(card));
@@ -492,27 +350,10 @@
     document.getElementById('me-face').innerHTML = Arcade.character();
     document.getElementById('me-name').textContent = me.name;
     document.getElementById('me-tix').innerHTML = `${Arcade.ticketIcon}${me.tickets.toLocaleString('en-US')} tickets`;
-    document.documentElement.style.setProperty('--me', me.color);
   }
   renderMe();
   Arcade.onChange(renderMe);
   document.getElementById('me-chip').addEventListener('click', () => Arcade.open());
-
-  // Drifting game-controller shapes: triangle, circle, square and cross.
-  const SHAPES = [
-    '<path d="M12 3 22 20H2Z"/>',
-    '<circle cx="12" cy="12" r="9"/>',
-    '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/>',
-    '<path d="M5 5 19 19M19 5 5 19"/>',
-  ];
-  const TINTS = ['var(--cyan)', 'var(--violet)', 'var(--pink)'];
-  const shapes = document.getElementById('shapes');
-  for (let i = 0; i < 16; i++) {
-    const size = 22 + Math.random() * 40;
-    const duration = 16 + Math.random() * 18;
-    shapes.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 24 24" width="${size}" height="${size}"
-      style="left:${Math.random() * 100}%;color:${TINTS[i % TINTS.length]};animation-duration:${duration}s;animation-delay:${-Math.random() * duration}s">${SHAPES[i % SHAPES.length]}</svg>`);
-  }
 </script>
 </body>
 </html>
