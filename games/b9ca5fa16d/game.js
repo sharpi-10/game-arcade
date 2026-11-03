@@ -387,8 +387,16 @@ function onNetMessage(msg, from) {
 }
 
 function onRoom(r) {
+  const was = room;
   room = r;
   waitingForRace = false;
+  // The room went away mid-race (the panel clears it before the room's own close handlers run):
+  // everyone this browser can't hear from any more is handed to the computer.
+  if (!r && was && state !== 'menu') {
+    boats.forEach(takeOver);
+    setPaused(false);
+    if (!$('results').hidden) showResults();
+  }
   if (r) {
     r.on('message', onNetMessage);
     r.on('players', () => {
@@ -399,13 +407,8 @@ function onRoom(r) {
     r.on('join', (p) => { if (state !== 'menu') r.sendTo(p.id, { t: 'busy' }); });
     r.on('leave', (p) => { if (state !== 'menu') takeOver(boatByPeer(p.id)); });
     r.on('close', (reason) => {
-      if (r !== room) return;
-      room = null;
-      if (state === 'menu') { setupBoats(); renderMenu(); return; }
-      boats.forEach(takeOver);
-      setPaused(false);
-      if (reason) Arcade.toast(`<b>${reason}</b><span>Racing on against the computer</span>`);
-      if (!$('results').hidden) showResults();
+      if (room === r) onRoom(null);
+      if (state !== 'menu' && reason) Arcade.toast(`<b>${reason}</b><span>Racing on against the computer</span>`);
     });
   }
   if (state === 'menu') { setupBoats(); renderMenu(); }
