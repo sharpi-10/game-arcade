@@ -8,7 +8,7 @@
 'use strict';
 
 const PEERJS = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
-const PREFIX = 'sharpi-arcade-room-';
+const PREFIX = 'arcade-k7q2-room-';
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, so codes read cleanly aloud
 const CODE_LEN = 4;
 const HEARTBEAT = 2000;

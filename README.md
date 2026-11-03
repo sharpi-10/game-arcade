@@ -1,6 +1,6 @@
 # Game Arcade
 
-A small browser arcade at https://sharpi-10.github.io/game-arcade/
+A small browser arcade.
 
 The home page lists every open game. A few games are locked behind a code, which you only get by being told it, and are typed into the popup behind the small key button in the corner. The page holds no codes, and a locked game's card (name, picture, link) is encrypted with its code. A game can also keep part of itself behind a code: the home page records which game folders a code has opened in this browser, and the game checks with `Arcade.unlocked()`.
 
