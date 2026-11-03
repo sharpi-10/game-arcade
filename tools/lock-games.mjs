@@ -7,7 +7,7 @@
 //   node tools/lock-games.mjs ../arcade-private/games.json
 //
 // games.json: { "games": [ { "code"?: "...", "card": { title, tag, description, href,
-//   artFile (an SVG next to games.json), stats: [{ label, key, format: "time" | "money",
+//   artFile (an SVG next to games.json), stats: [{ label, key, format: "time" | "money" | "count",
 //   fallback? }], empty? } } ] }
 // An entry can hold { "code": "...", "tool": "path/to/tool.js" } instead of a card: the code then
 // loads and opens that script (the owner's control panel) rather than showing a game.
